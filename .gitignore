@@ -1,0 +1,27 @@
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+OutputBin/
+Publish/
+*.exe
+*.dll
+*.pdb
+*.msi
+*.zip
+
+## Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+
+## Temp & Cache
+*.tmp
+*.log
+OverlayDataBridge_PublishTemp/
