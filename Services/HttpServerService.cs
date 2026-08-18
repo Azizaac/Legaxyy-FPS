@@ -18,20 +18,34 @@ public sealed class HttpServerService : IDisposable
         _wsPort = wsPort;
         _logger = logger;
         _listener = new HttpListener();
-        _listener.Prefixes.Add($"http://*:{_port}/");
     }
 
     public void Start()
     {
         try
         {
-            _listener.Start();
-            _logger.Info($"HttpServerService: Listening on http://*:{_port}/ (Web UI)");
+            // Try wildcard first (works if admin or urlacl registered), fallback to localhost/127.0.0.1
+            try
+            {
+                _listener.Prefixes.Add($"http://localhost:{_port}/");
+                _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
+                _listener.Start();
+                _logger.Info($"HttpServerService: Listening on http://localhost:{_port}/ and http://127.0.0.1:{_port}/");
+            }
+            catch
+            {
+                _listener.Close();
+                _cts = new CancellationTokenSource();
+                var fallbackListener = new HttpListener();
+                fallbackListener.Prefixes.Add($"http://127.0.0.1:{_port}/");
+                fallbackListener.Start();
+                _logger.Info($"HttpServerService: Listening on fallback http://127.0.0.1:{_port}/");
+            }
             _serverTask = Task.Run(() => ServerLoopAsync(_cts.Token));
         }
         catch (Exception ex)
         {
-            _logger.Error($"HttpServerService: Failed to start listener. Try running as Administrator. {ex.Message}");
+            _logger.Error($"HttpServerService: Failed to start listener: {ex.Message}");
         }
     }
 

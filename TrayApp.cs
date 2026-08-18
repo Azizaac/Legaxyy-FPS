@@ -89,6 +89,9 @@ public sealed class TrayApp : IDisposable
 
         RefreshStatus();
         _logger.Info($"TrayApp: Initialized. WS port={wsPort}, HTTP port={httpPort}");
+
+        // Automatically open the Overlay Window when application starts
+        OnShowOverlayClicked(null, EventArgs.Empty);
     }
 
     // ─── tray callbacks ──────────────────────────────────────────────────────
