@@ -1,21 +1,24 @@
 [Setup]
 AppName=LegaxyyFPS
-AppVersion=1.0
+AppVersion=1.1
 DefaultDirName={autopf}\LegaxyyFPS
 DefaultGroupName=LegaxyyFPS
 UninstallDisplayIcon={app}\LegaxyyFPS.exe
 Compression=lzma2
 SolidCompression=yes
-OutputDir=C:\Users\choir\Documents\OverlayDataBridge
-OutputBaseFilename=LegaxyyFPS_Setup_Fix
+OutputDir=..\Release
+OutputBaseFilename=LegaxyyFPS_Setup_v1.1
 PrivilegesRequired=admin
-SetupIconFile=C:\Users\choir\Documents\OverlayDataBridge\AppIcon.ico
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+SetupIconFile=AppIcon.ico
 
 [Files]
-Source: "C:\Users\choir\Documents\OverlayDataBridge\Publish\LegaxyyFPS.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\choir\Documents\OverlayDataBridge\Publish\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\choir\Documents\OverlayDataBridge\Publish\Uninstall_Overlay.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\choir\Downloads\Compressed\MSIAfterburnerSetup467Beta2\MSIAfterburnerSetup467Beta2.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+Source: "..\App\LegaxyyFPS.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\App\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\App\index.html"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\App\Uninstall_Overlay.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\App\MSIAfterburnerSetup467Beta2.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 
 [Icons]
 Name: "{group}\LegaxyyFPS"; Filename: "{app}\LegaxyyFPS.exe"

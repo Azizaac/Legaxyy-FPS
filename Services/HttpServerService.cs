@@ -79,7 +79,10 @@ public sealed class HttpServerService : IDisposable
     {
         try
         {
-            string html = GetHtmlContent();
+            string customHtmlPath = Path.Combine(AppContext.BaseDirectory, "index.html");
+            string html = File.Exists(customHtmlPath)
+                ? File.ReadAllText(customHtmlPath, Encoding.UTF8)
+                : GetHtmlContent();
             byte[] buffer = Encoding.UTF8.GetBytes(html);
             context.Response.ContentLength64 = buffer.Length;
             context.Response.ContentType = "text/html; charset=utf-8";
@@ -562,6 +565,14 @@ public sealed class HttpServerService : IDisposable
       display: flex;
       flex-direction: column;
       gap: 2px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .cost-box:hover {
+      border-color: rgba(74, 222, 128, 0.7);
+      box-shadow: 0 0 24px rgba(74, 222, 128, 0.3);
+      transform: translateY(-2px);
     }
 
     .cost-main {
@@ -579,6 +590,255 @@ public sealed class HttpServerService : IDisposable
       font-size: 15px;
       font-weight: 800;
       color: #86efac;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cost-sub-hint {
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(134, 239, 172, 0.7);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    /* ── Settings Gear Button ── */
+    .hud-settings-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1.5px solid rgba(255, 255, 255, 0.16);
+      color: #e2e8f0;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      font-size: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .hud-settings-btn:hover {
+      background: rgba(74, 222, 128, 0.2);
+      border-color: #4ade80;
+      color: #4ade80;
+      box-shadow: 0 0 16px rgba(74, 222, 128, 0.4);
+      transform: rotate(30deg);
+    }
+
+    /* ── PLN Modal Dialog ── */
+    .pln-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 12, 0.85);
+      backdrop-filter: blur(14px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: modalFadeIn 0.2s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .pln-modal-card {
+      background: #0d101a;
+      border: 2px solid rgba(255, 255, 255, 0.16);
+      border-top: 3px solid #4ade80;
+      border-radius: 24px;
+      width: 580px;
+      max-width: 90vw;
+      box-shadow: 0 32px 64px -12px rgba(0, 0, 0, 0.95), 0 0 32px rgba(74, 222, 128, 0.15);
+      padding: 26px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .pln-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1.5px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 14px;
+    }
+
+    .pln-modal-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pln-modal-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 14px #4ade80;
+    }
+
+    .pln-modal-title h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    .pln-modal-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 32px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color 0.15s;
+    }
+
+    .pln-modal-close:hover {
+      color: #ffffff;
+    }
+
+    .pln-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .pln-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pln-label {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #cbd5e1;
+    }
+
+    .pln-select, .pln-input {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .pln-select:focus, .pln-input:focus {
+      border-color: #4ade80;
+      box-shadow: 0 0 16px rgba(74, 222, 128, 0.35);
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    .pln-select option {
+      background: #111524;
+      color: #ffffff;
+      padding: 10px;
+    }
+
+    .pln-form-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .pln-input-range-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .pln-input-range-wrap .pln-input {
+      width: 100%;
+      padding-right: 56px;
+    }
+
+    .pln-input-addon {
+      position: absolute;
+      right: 16px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #94a3b8;
+      pointer-events: none;
+    }
+
+    .pln-preview-box {
+      background: linear-gradient(135deg, rgba(74, 222, 128, 0.1), rgba(34, 197, 94, 0.03));
+      border: 1.5px dashed rgba(74, 222, 128, 0.35);
+      border-radius: 14px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pln-preview-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #86efac;
+    }
+
+    .pln-preview-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .pln-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      border-top: 1.5px solid rgba(255, 255, 255, 0.1);
+      padding-top: 16px;
+    }
+
+    .pln-btn {
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .pln-btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+    }
+
+    .pln-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+
+    .pln-btn-primary {
+      background: #22c55e;
+      border: none;
+      color: #051408;
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+    }
+
+    .pln-btn-primary:hover {
+      background: #4ade80;
+      box-shadow: 0 0 28px rgba(74, 222, 128, 0.6);
+      transform: translateY(-1px);
     }
 
     /* ── Live Pulse Connection Dot ── */
@@ -813,6 +1073,7 @@ public sealed class HttpServerService : IDisposable
           <div class="hud-dot" style="background:var(--pwr); color:var(--pwr);"></div>
           <span class="hud-title">POWER</span>
         </div>
+        <button class="hud-settings-btn" id="btn-open-pln-settings" type="button" title="Pengaturan Tarif Listrik PLN">⚙️</button>
       </div>
 
       <div class="pwr-hero">
@@ -820,15 +1081,79 @@ public sealed class HttpServerService : IDisposable
         <span class="pwr-main-unit">W</span>
       </div>
 
-      <div class="cost-box">
+      <div class="cost-box" id="cost-box-click" title="Klik untuk ubah tarif & jam pemakaian listrik">
         <span class="cost-main" id="pwr-cost">—</span>
-        <span class="cost-sub">Est. Biaya Listrik PLN / bln</span>
+        <div class="cost-sub">
+          <span id="pwr-cost-sub">Est. Biaya Listrik PLN / bln</span>
+          <span class="cost-sub-hint">⚙️ Ubah</span>
+        </div>
       </div>
     </div>
 
   </div><!-- /bot-grid -->
 
 </div><!-- /hud-stage -->
+
+<!-- PLN Settings Modal -->
+<div class="pln-modal-overlay" id="pln-modal" style="display: none;">
+  <div class="pln-modal-card">
+    <div class="pln-modal-header">
+      <div class="pln-modal-title">
+        <span class="pln-modal-dot"></span>
+        <h3>Kustomisasi Biaya Listrik PLN</h3>
+      </div>
+      <button class="pln-modal-close" id="btn-close-pln-modal" type="button">&times;</button>
+    </div>
+
+    <div class="pln-modal-body">
+      <div class="pln-form-group">
+        <label class="pln-label">Golongan Daya Listrik PLN</label>
+        <select class="pln-select" id="pln-select-tier">
+          <option value="900_nonsubsidi" data-rate="1352" data-label="900 VA">900 VA (R-1/TR Non-Subsidi) — Rp 1.352 / kWh</option>
+          <option value="1300_2200" data-rate="1444.7" data-label="1300/2200 VA">1.300 VA & 2.200 VA (R-1/TR) — Rp 1.444,70 / kWh</option>
+          <option value="3500_5500" data-rate="1699.53" data-label="3500-5500 VA">3.500 VA – 5.500 VA (R-2/TR) — Rp 1.699,53 / kWh</option>
+          <option value="6600_up" data-rate="1699.53" data-label="6600 VA+">6.600 VA ke atas (R-3/TR) — Rp 1.699,53 / kWh</option>
+          <option value="900_subsidi" data-rate="605" data-label="900 VA Subsidi">900 VA (R-1/TR Bersubsidi) — Rp 605 / kWh</option>
+          <option value="450_subsidi" data-rate="415" data-label="450 VA Subsidi">450 VA (R-1/TR Bersubsidi) — Rp 415 / kWh</option>
+          <option value="custom" data-rate="0" data-label="Custom">Tarif Kustom (Input Manual Rp/kWh)</option>
+        </select>
+      </div>
+
+      <div class="pln-form-group" id="pln-custom-rate-group" style="display: none;">
+        <label class="pln-label">Tarif Manual (Rp per kWh)</label>
+        <input type="number" class="pln-input" id="pln-input-custom-rate" min="1" step="0.01" value="1352" placeholder="Contoh: 1444.70">
+      </div>
+
+      <div class="pln-form-row">
+        <div class="pln-form-group" style="flex: 1;">
+          <label class="pln-label">Jam Pemakaian / Hari</label>
+          <div class="pln-input-range-wrap">
+            <input type="number" class="pln-input" id="pln-input-hours" min="1" max="24" value="8">
+            <span class="pln-input-addon">Jam</span>
+          </div>
+        </div>
+
+        <div class="pln-form-group" style="flex: 1;">
+          <label class="pln-label">Hari / Bulan</label>
+          <div class="pln-input-range-wrap">
+            <input type="number" class="pln-input" id="pln-input-days" min="1" max="31" value="30">
+            <span class="pln-input-addon">Hari</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pln-preview-box">
+        <div class="pln-preview-label">Rumus Estimasi:</div>
+        <div class="pln-preview-val" id="pln-preview-formula">(Watt / 1000) × 8 jam × 30 hari × Rp 1.352</div>
+      </div>
+    </div>
+
+    <div class="pln-modal-footer">
+      <button class="pln-btn pln-btn-secondary" id="btn-reset-pln" type="button">Reset Default</button>
+      <button class="pln-btn pln-btn-primary" id="btn-save-pln" type="button">Simpan Pengaturan</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -963,14 +1288,158 @@ function connect() {
     // ── Power & PLN Cost ──
     const pw = d.power?.totalW;
     $('pwr-val').textContent = pw != null ? Number(pw).toFixed(1) : '—';
-    if (pw != null) {
-      const costPerMonth = (pw / 1000) * 8 * 30 * 1352;
-      $('pwr-cost').textContent = 'Rp ' + Math.round(costPerMonth).toLocaleString('id-ID');
-    } else {
-      $('pwr-cost').textContent = '—';
-    }
+    renderPlnCost(pw);
   };
 }
+
+// ── PLN Settings & Reactive Logic ──
+const DEFAULT_PLN = {
+  tier: '900_nonsubsidi',
+  rate: 1352.0,
+  hours: 8,
+  days: 30,
+  label: '900 VA'
+};
+
+let plnCfg = { ...DEFAULT_PLN };
+try {
+  const saved = localStorage.getItem('legaxyy_pln_cfg');
+  if (saved) {
+    plnCfg = { ...DEFAULT_PLN, ...JSON.parse(saved) };
+  }
+} catch (e) { }
+
+function updatePlnSublabel() {
+  const subEl = $('pwr-cost-sub');
+  if (subEl) {
+    subEl.textContent = `Est. Biaya Listrik PLN (${plnCfg.label} • ${plnCfg.hours} jam/hr)`;
+  }
+}
+
+function calculateMonthlyCost(watts) {
+  if (watts == null || isNaN(watts)) return null;
+  const kwhPerMonth = (watts / 1000) * plnCfg.hours * plnCfg.days;
+  return kwhPerMonth * plnCfg.rate;
+}
+
+function renderPlnCost(watts) {
+  if (watts != null && !isNaN(watts)) {
+    const cost = calculateMonthlyCost(watts);
+    $('pwr-cost').textContent = 'Rp ' + Math.round(cost).toLocaleString('id-ID');
+  } else {
+    $('pwr-cost').textContent = '—';
+  }
+}
+
+function updateFormulaPreview() {
+  const fEl = $('pln-preview-formula');
+  if (fEl) {
+    const rateDisp = Number(plnCfg.rate).toLocaleString('id-ID');
+    fEl.textContent = `(Watt / 1000) × ${plnCfg.hours} jam × ${plnCfg.days} hari × Rp ${rateDisp}`;
+  }
+}
+
+const plnModal = $('pln-modal');
+const tierSelect = $('pln-select-tier');
+const customGroup = $('pln-custom-rate-group');
+const customInput = $('pln-input-custom-rate');
+const hoursInput = $('pln-input-hours');
+const daysInput = $('pln-input-days');
+
+function openPlnModal() {
+  tierSelect.value = plnCfg.tier || '900_nonsubsidi';
+  if (tierSelect.value === 'custom') {
+    customGroup.style.display = 'flex';
+    customInput.value = plnCfg.rate;
+  } else {
+    customGroup.style.display = 'none';
+  }
+  hoursInput.value = plnCfg.hours;
+  daysInput.value = plnCfg.days;
+  updateFormulaPreview();
+  plnModal.style.display = 'flex';
+}
+
+function closePlnModal() {
+  plnModal.style.display = 'none';
+}
+
+$('btn-open-pln-settings').addEventListener('click', (e) => { e.stopPropagation(); openPlnModal(); });
+$('cost-box-click').addEventListener('click', () => openPlnModal());
+$('btn-close-pln-modal').addEventListener('click', () => closePlnModal());
+plnModal.addEventListener('click', (e) => {
+  if (e.target === plnModal) closePlnModal();
+});
+
+tierSelect.addEventListener('change', () => {
+  if (tierSelect.value === 'custom') {
+    customGroup.style.display = 'flex';
+    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
+    plnCfg.label = 'Custom';
+  } else {
+    customGroup.style.display = 'none';
+    const opt = tierSelect.selectedOptions[0];
+    plnCfg.rate = parseFloat(opt.getAttribute('data-rate'));
+    plnCfg.label = opt.getAttribute('data-label');
+  }
+  updateFormulaPreview();
+});
+
+customInput.addEventListener('input', () => {
+  if (tierSelect.value === 'custom') {
+    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
+    updateFormulaPreview();
+  }
+});
+
+hoursInput.addEventListener('input', () => {
+  plnCfg.hours = Math.max(1, Math.min(24, parseInt(hoursInput.value) || 8));
+  updateFormulaPreview();
+});
+
+daysInput.addEventListener('input', () => {
+  plnCfg.days = Math.max(1, Math.min(31, parseInt(daysInput.value) || 30));
+  updateFormulaPreview();
+});
+
+$('btn-save-pln').addEventListener('click', () => {
+  plnCfg.tier = tierSelect.value;
+  if (plnCfg.tier === 'custom') {
+    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
+    plnCfg.label = 'Custom';
+  } else {
+    const opt = tierSelect.selectedOptions[0];
+    plnCfg.rate = parseFloat(opt.getAttribute('data-rate'));
+    plnCfg.label = opt.getAttribute('data-label');
+  }
+  plnCfg.hours = Math.max(1, Math.min(24, parseInt(hoursInput.value) || 8));
+  plnCfg.days = Math.max(1, Math.min(31, parseInt(daysInput.value) || 30));
+
+  try {
+    localStorage.setItem('legaxyy_pln_cfg', JSON.stringify(plnCfg));
+  } catch (e) { }
+
+  updatePlnSublabel();
+  closePlnModal();
+
+  const curPw = parseFloat($('pwr-val').textContent);
+  if (!isNaN(curPw)) {
+    renderPlnCost(curPw);
+  }
+});
+
+$('btn-reset-pln').addEventListener('click', () => {
+  plnCfg = { ...DEFAULT_PLN };
+  try { localStorage.removeItem('legaxyy_pln_cfg'); } catch (e) { }
+  tierSelect.value = plnCfg.tier;
+  customGroup.style.display = 'none';
+  hoursInput.value = plnCfg.hours;
+  daysInput.value = plnCfg.days;
+  updateFormulaPreview();
+  updatePlnSublabel();
+});
+
+updatePlnSublabel();
 
 function autoScale() {
   const scaleX = window.innerWidth / 1920;
