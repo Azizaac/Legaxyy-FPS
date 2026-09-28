@@ -181,13 +181,23 @@ public sealed class TrayApp : IDisposable
     {
         try
         {
+            var currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (currentExe == null) return false;
+
             using var process = new System.Diagnostics.Process();
             process.StartInfo.FileName = "powershell.exe";
-            process.StartInfo.Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"Get-ScheduledTask -TaskName '{TaskName}' -ErrorAction Stop\"";
+            // Get-ScheduledTask returns task actions; we compare the Execute path to current exe
+            process.StartInfo.Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"" +
+                $"$t = Get-ScheduledTask -TaskName '{TaskName}' -ErrorAction SilentlyContinue; " +
+                $"if ($t -eq $null) {{ exit 1 }}; " +
+                $"$exe = ($t.Actions | Select-Object -First 1).Execute -replace '\\\"',''; " +
+                $"if ($exe -ieq '{currentExe.Replace("'", "''")}') {{ exit 0 }} else {{ exit 2 }}\"";
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.RedirectStandardOutput = true;
             process.Start();
             process.WaitForExit();
+            // exit 0 = task exists AND path matches current exe
             return process.ExitCode == 0;
         }
         catch { return false; }

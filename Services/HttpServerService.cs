@@ -24,7 +24,6 @@ public sealed class HttpServerService : IDisposable
     {
         try
         {
-            // Try wildcard first (works if admin or urlacl registered), fallback to localhost/127.0.0.1
             try
             {
                 _listener.Prefixes.Add($"http://localhost:{_port}/");
@@ -83,6 +82,8 @@ public sealed class HttpServerService : IDisposable
             string html = File.Exists(customHtmlPath)
                 ? File.ReadAllText(customHtmlPath, Encoding.UTF8)
                 : GetHtmlContent();
+            html = html.Replace("{{{_wsPort}}}", _wsPort.ToString())
+                       .Replace("{{_wsPort}}", _wsPort.ToString());
             byte[] buffer = Encoding.UTF8.GetBytes(html);
             context.Response.ContentLength64 = buffer.Length;
             context.Response.ContentType = "text/html; charset=utf-8";
@@ -103,7 +104,7 @@ public sealed class HttpServerService : IDisposable
 
     private string GetHtmlContent()
     {
-        return $$"""
+        return $$$"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,1350 +113,932 @@ public sealed class HttpServerService : IDisposable
   <title>LegaxyyFPS Overlay</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #06070a;
-      --card-bg: rgba(13, 15, 22, 0.96);
-      --card-border: rgba(255, 255, 255, 0.14);
-      
-      --cpu: #38bdf8;
-      --cpu-glow: rgba(56, 189, 248, 0.35);
-      
-      --gpu: #c084fc;
-      --gpu-glow: rgba(192, 132, 252, 0.35);
-      
-      --ram: #34d399;
-      --ram-glow: rgba(52, 211, 153, 0.35);
-      
-      --vram: #818cf8;
-      --vram-glow: rgba(129, 140, 248, 0.35);
-      
-      --fps: #fb923c;
-      --fps-glow: rgba(251, 146, 60, 0.4);
-      
-      --pwr: #f472b6;
-      --pwr-glow: rgba(244, 114, 182, 0.35);
-      
-      --text-main: #ffffff;
-      --text-muted: #e2e8f0;
-      --text-dim: #64748b;
-      --hot: #f43f5e;
-      --warn: #fbbf24;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      width: 100%;
-      height: 100%;
-      background: var(--bg);
-      overflow: hidden;
-    }
-
-    body {
-      width: 1920px;
-      height: 1080px;
-      background: var(--bg);
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
-      user-select: none;
-      overflow: hidden;
-      margin: 0;
-      padding: 0;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-
-    /* ── Main Container ── */
-    .hud-stage {
-      position: absolute;
-      inset: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    /* ── Tactical Card Surface ── */
-    .hud-card {
-      position: relative;
-      background: var(--card-bg);
-      border: 2px solid var(--card-border);
-      border-top: 2.5px solid rgba(255, 255, 255, 0.3);
-      border-radius: 24px;
-      padding: 20px 28px;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(24px);
-      overflow: hidden;
-    }
-
-    /* ── Card Header Badge ── */
-    .hud-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .hud-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.08);
-      padding: 6px 18px;
-      border-radius: 12px;
-      border: 1.5px solid rgba(255, 255, 255, 0.15);
-    }
-
-    .hud-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      box-shadow: 0 0 14px currentColor;
-    }
-
-    .hud-title {
-      font-size: 28px;
-      font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-main);
-    }
-
-    .hud-device-name {
-      font-size: 28px;
-      font-weight: 800;
-      color: #ffffff;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 520px;
-      text-shadow: 0 0 16px rgba(255,255,255,0.4);
-    }
-
-    /* ── Grid Layouts ── */
-    .top-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      flex: 1.15;
-    }
-
-    .bot-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: 16px;
-      flex: 1;
-    }
-
-    /* ── Temperature Hero Display ── */
-    .hero-temp-box {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 10px;
-      padding: 10px 28px;
-      border-radius: 22px;
-      margin-bottom: 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 0 28px currentColor;
-      width: fit-content;
-    }
-
-    .hero-temp-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 88px;
-      font-weight: 900;
-      letter-spacing: -0.04em;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .hero-temp-unit {
-      font-size: 38px;
-      font-weight: 900;
-      opacity: 0.85;
-    }
-
-    .hero-temp-sub {
-      font-size: 20px;
-      font-weight: 900;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.14);
-      padding: 4px 12px;
-      border-radius: 8px;
-      margin-left: 8px;
-    }
-
-    /* ── Thermal & Load Meter ── */
-    .meter-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 12px;
-    }
-
-    .meter-label {
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: 0.1em;
-      color: var(--text-main);
-      min-width: 60px;
-    }
-
-    .meter-track {
-      flex: 1;
-      height: 20px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .meter-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 10px;
-      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 0 18px currentColor;
-    }
-
-    .meter-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 38px;
-      font-weight: 900;
-      color: var(--text-main);
-      min-width: 110px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* ── Telemetry Data Rows ── */
-    .stat-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-top: auto;
-      border-top: 2px solid rgba(255, 255, 255, 0.1);
-      padding-top: 10px;
-    }
-
-    .stat-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 2px 0;
-    }
-
-    .stat-label {
-      font-size: 28px;
-      font-weight: 800;
-      color: var(--text-muted);
-    }
-
-    .stat-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 36px;
-      font-weight: 900;
-      color: #ffffff;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .stat-value .unit {
-      font-size: 22px;
-      font-weight: 800;
-      color: #94a3b8;
-      margin-left: 6px;
-    }
-
-    /* ── Radial Gauges (RAM / VRAM) ── */
-    .gauge-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      margin: 0;
-    }
-
-    .gauge-box {
-      position: relative;
-      width: 150px;
-      height: 150px;
-    }
-
-    .gauge-box svg {
-      width: 150px;
-      height: 150px;
-      transform: rotate(-90deg);
-    }
-
-    .gauge-bg {
-      fill: none;
-      stroke: rgba(255, 255, 255, 0.08);
-      stroke-width: 16;
-    }
-
-    .gauge-progress {
-      fill: none;
-      stroke-width: 16;
-      stroke-linecap: round;
-      transition: stroke-dashoffset 0.4s ease, stroke 0.3s;
-    }
-
-    .gauge-center-text {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .gauge-pct {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 52px;
-      font-weight: 900;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .gauge-pct-unit {
-      font-size: 16px;
-      font-weight: 900;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .vram-temp-pill {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 22px;
-      font-weight: 900;
-      padding: 4px 14px;
-      border-radius: 12px;
-      background: rgba(129, 140, 248, 0.18);
-      border: 2px solid rgba(129, 140, 248, 0.5);
-      color: var(--vram);
-    }
-
-    /* ── FPS Tactical Center ── */
-    .fps-hero {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      margin: 2px 0 6px;
-    }
-
-    .fps-main-num {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 96px;
-      font-weight: 900;
-      line-height: 0.9;
-      letter-spacing: -0.04em;
-      color: var(--fps);
-      text-shadow: 0 0 32px var(--fps-glow);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .fps-label-text {
-      font-size: 26px;
-      font-weight: 900;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-
-    .fps-live-badge {
-      font-size: 16px;
-      font-weight: 900;
-      letter-spacing: 0.1em;
-      padding: 4px 12px;
-      border-radius: 10px;
-      background: rgba(251, 146, 60, 0.18);
-      border: 2px solid rgba(251, 146, 60, 0.5);
-      color: var(--fps);
-    }
-
-    .fps-frametime {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 24px;
-      font-weight: 800;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .fps-frametime span {
-      color: #ffffff;
-      font-weight: 900;
-    }
-
-    .fps-lows-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: auto;
-      background: rgba(255, 255, 255, 0.05);
-      padding: 10px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .fps-low-card {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .fps-low-title {
-      font-size: 16px;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-
-    .fps-low-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 42px;
-      font-weight: 900;
-      color: #ffffff;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* ── Power & PLN Meter ── */
-    .pwr-hero {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      margin: 4px 0 10px;
-    }
-
-    .pwr-main-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 84px;
-      font-weight: 900;
-      line-height: 0.95;
-      letter-spacing: -0.03em;
-      color: var(--pwr);
-      text-shadow: 0 0 28px var(--pwr-glow);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .pwr-main-unit {
-      font-size: 30px;
-      font-weight: 900;
-      color: var(--text-muted);
-    }
-
-    .cost-box {
-      margin-top: auto;
-      background: linear-gradient(145deg, rgba(74, 222, 128, 0.15), rgba(34, 197, 94, 0.05));
-      border: 2px solid rgba(74, 222, 128, 0.35);
-      padding: 12px 16px;
-      border-radius: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .cost-box:hover {
-      border-color: rgba(74, 222, 128, 0.7);
-      box-shadow: 0 0 24px rgba(74, 222, 128, 0.3);
-      transform: translateY(-2px);
-    }
-
-    .cost-main {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 44px;
-      font-weight: 900;
-      color: #4ade80;
-      letter-spacing: -0.03em;
-      line-height: 1;
-      text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .cost-sub {
-      font-size: 15px;
-      font-weight: 800;
-      color: #86efac;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .cost-sub-hint {
-      font-size: 12px;
-      font-weight: 700;
-      color: rgba(134, 239, 172, 0.7);
-      background: rgba(255, 255, 255, 0.06);
-      padding: 2px 8px;
-      border-radius: 6px;
-    }
-
-    /* ── Settings Gear Button ── */
-    .hud-settings-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1.5px solid rgba(255, 255, 255, 0.16);
-      color: #e2e8f0;
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      font-size: 18px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .hud-settings-btn:hover {
-      background: rgba(74, 222, 128, 0.2);
-      border-color: #4ade80;
-      color: #4ade80;
-      box-shadow: 0 0 16px rgba(74, 222, 128, 0.4);
-      transform: rotate(30deg);
-    }
-
-    /* ── PLN Modal Dialog ── */
-    .pln-modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(4, 6, 12, 0.85);
-      backdrop-filter: blur(14px);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      animation: modalFadeIn 0.2s ease-out;
-    }
-
-    @keyframes modalFadeIn {
-      from { opacity: 0; transform: scale(0.96); }
-      to { opacity: 1; transform: scale(1); }
-    }
-
-    .pln-modal-card {
-      background: #0d101a;
-      border: 2px solid rgba(255, 255, 255, 0.16);
-      border-top: 3px solid #4ade80;
-      border-radius: 24px;
-      width: 580px;
-      max-width: 90vw;
-      box-shadow: 0 32px 64px -12px rgba(0, 0, 0, 0.95), 0 0 32px rgba(74, 222, 128, 0.15);
-      padding: 26px 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-
-    .pln-modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1.5px solid rgba(255, 255, 255, 0.1);
-      padding-bottom: 14px;
-    }
-
-    .pln-modal-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .pln-modal-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #4ade80;
-      box-shadow: 0 0 14px #4ade80;
-    }
-
-    .pln-modal-title h3 {
-      font-size: 22px;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.01em;
-    }
-
-    .pln-modal-close {
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      font-size: 32px;
-      line-height: 1;
-      cursor: pointer;
-      padding: 0 4px;
-      transition: color 0.15s;
-    }
-
-    .pln-modal-close:hover {
-      color: #ffffff;
-    }
-
-    .pln-modal-body {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .pln-form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .pln-label {
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: #cbd5e1;
-    }
-
-    .pln-select, .pln-input {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1.5px solid rgba(255, 255, 255, 0.18);
-      border-radius: 12px;
-      padding: 12px 16px;
-      color: #ffffff;
-      font-family: inherit;
-      font-size: 16px;
-      font-weight: 600;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    .pln-select:focus, .pln-input:focus {
-      border-color: #4ade80;
-      box-shadow: 0 0 16px rgba(74, 222, 128, 0.35);
-      background: rgba(255, 255, 255, 0.09);
-    }
-
-    .pln-select option {
-      background: #111524;
-      color: #ffffff;
-      padding: 10px;
-    }
-
-    .pln-form-row {
-      display: flex;
-      gap: 16px;
-    }
-
-    .pln-input-range-wrap {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .pln-input-range-wrap .pln-input {
-      width: 100%;
-      padding-right: 56px;
-    }
-
-    .pln-input-addon {
-      position: absolute;
-      right: 16px;
-      font-size: 14px;
-      font-weight: 800;
-      color: #94a3b8;
-      pointer-events: none;
-    }
-
-    .pln-preview-box {
-      background: linear-gradient(135deg, rgba(74, 222, 128, 0.1), rgba(34, 197, 94, 0.03));
-      border: 1.5px dashed rgba(74, 222, 128, 0.35);
-      border-radius: 14px;
-      padding: 14px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .pln-preview-label {
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #86efac;
-    }
-
-    .pln-preview-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
-      font-weight: 700;
-      color: #ffffff;
-    }
-
-    .pln-modal-footer {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 12px;
-      border-top: 1.5px solid rgba(255, 255, 255, 0.1);
-      padding-top: 16px;
-    }
-
-    .pln-btn {
-      padding: 12px 22px;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .pln-btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1.5px solid rgba(255, 255, 255, 0.15);
-      color: #cbd5e1;
-    }
-
-    .pln-btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.14);
-      color: #ffffff;
-    }
-
-    .pln-btn-primary {
-      background: #22c55e;
-      border: none;
-      color: #051408;
-      box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
-    }
-
-    .pln-btn-primary:hover {
-      background: #4ade80;
-      box-shadow: 0 0 28px rgba(74, 222, 128, 0.6);
-      transform: translateY(-1px);
-    }
-
-    /* ── Live Pulse Connection Dot ── */
-    .status-beacon {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #ef4444;
-      transition: background 0.3s, box-shadow 0.3s;
-      z-index: 100;
-    }
-
-    .status-beacon.active {
-      background: #22c55e;
-      box-shadow: 0 0 18px #22c55e;
-    }
-
-    .nil {
-      color: var(--text-dim) !important;
-      font-weight: 400 !important;
-    }
+      --bg:        #060810;
+      --surface:   rgba(12,15,26,0.94);
+      --border:    rgba(255,255,255,0.09);
+      --border-hi: rgba(255,255,255,0.2);
+
+      --cpu:       #38bdf8;
+      --cpu-dim:   rgba(56,189,248,0.15);
+      --cpu-glow:  rgba(56,189,248,0.5);
+
+      --gpu:       #c084fc;
+      --gpu-dim:   rgba(192,132,252,0.15);
+      --gpu-glow:  rgba(192,132,252,0.5);
+
+      --ram:       #34d399;
+      --ram-dim:   rgba(52,211,153,0.15);
+      --ram-glow:  rgba(52,211,153,0.5);
+
+      --vram:      #818cf8;
+      --vram-dim:  rgba(129,140,248,0.15);
+      --vram-glow: rgba(129,140,248,0.5);
+
+      --fps:       #fb923c;
+      --fps-dim:   rgba(251,146,60,0.15);
+      --fps-glow:  rgba(251,146,60,0.55);
+
+      --pwr:       #f472b6;
+      --pwr-dim:   rgba(244,114,182,0.15);
+      --pwr-glow:  rgba(244,114,182,0.5);
+
+      --green:     #4ade80;
+      --green-dim: rgba(74,222,128,0.15);
+      --green-glow:rgba(74,222,128,0.5);
+
+      --hot:       #f43f5e;
+      --warn:      #fbbf24;
+      --t1:        #ffffff;
+      --t2:        #cbd5e1;
+      --t3:        #64748b;
+      --mono:      'JetBrains Mono', monospace;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    html{width:100%;height:100%;background:var(--bg);overflow:hidden}
+
+    body{
+      width:1920px;height:1080px;
+      background:var(--bg);
+      font-family:'Inter',system-ui,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      user-select:none;overflow:hidden;
+      position:absolute;top:0;left:0;
+    }
+
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;
+      background:
+        radial-gradient(ellipse 1100px 700px at 18% 8%,  rgba(56,189,248,0.045)  0%,transparent 65%),
+        radial-gradient(ellipse 900px  600px at 82% 6%,  rgba(192,132,252,0.045) 0%,transparent 65%),
+        radial-gradient(ellipse 800px  500px at 82% 92%, rgba(244,114,182,0.035) 0%,transparent 65%),
+        radial-gradient(ellipse 700px  450px at 18% 92%, rgba(52,211,153,0.03)   0%,transparent 65%);
+    }
+
+    /* ── Layout ── */
+    .stage{
+      position:absolute;inset:18px;
+      display:flex;flex-direction:column;gap:14px;
+      z-index:1;
+    }
+    .row-top{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1.15;min-height:0}
+    .row-bot{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;flex:1;min-height:0}
+
+    /* ── Card ── */
+    .card{
+      position:relative;
+      background:var(--surface);
+      border:1.5px solid var(--border);
+      border-radius:20px;
+      padding:22px 28px 20px;
+      display:flex;flex-direction:column;
+      overflow:hidden;
+      backdrop-filter:blur(32px) saturate(140%);
+      -webkit-backdrop-filter:blur(32px) saturate(140%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 28px 56px -14px rgba(0,0,0,0.85),
+        0 2px 4px rgba(0,0,0,0.5);
+    }
+    .card::before{
+      content:'';position:absolute;
+      top:0;left:20px;right:20px;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.25) 50%,transparent);
+    }
+    .card-cpu::after {content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 90% 55% at 8% 0%,  var(--cpu-dim)  0%,transparent 60%);pointer-events:none}
+    .card-gpu::after {content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 90% 55% at 92% 0%, var(--gpu-dim)  0%,transparent 60%);pointer-events:none}
+    .card-ram::after {content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 100% 65% at 50% 0%,var(--ram-dim)  0%,transparent 65%);pointer-events:none}
+    .card-vram::after{content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 100% 65% at 50% 0%,var(--vram-dim) 0%,transparent 65%);pointer-events:none}
+    .card-fps::after {content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 100% 65% at 50% 0%,var(--fps-dim)  0%,transparent 65%);pointer-events:none}
+    .card-pwr::after {content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse 100% 65% at 50% 0%,var(--pwr-dim)  0%,transparent 65%);pointer-events:none}
+
+    /* ── Card Header ── */
+    .card-head{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:14px;position:relative;z-index:1;
+    }
+
+    .chip{
+      display:inline-flex;align-items:center;gap:9px;
+      padding:6px 18px 6px 14px;
+      border-radius:999px;
+      border:1.5px solid var(--border-hi);
+      background:rgba(255,255,255,0.06);
+    }
+
+    .chip-dot{
+      width:10px;height:10px;border-radius:50%;flex-shrink:0;
+      animation:pdot 2.4s ease-in-out infinite;
+    }
+    @keyframes pdot{
+      0%,100%{opacity:1;transform:scale(1)}
+      50%    {opacity:0.55;transform:scale(0.8)}
+    }
+
+    .chip-label{
+      font-size:22px;font-weight:900;
+      letter-spacing:0.12em;text-transform:uppercase;
+      color:var(--t1);
+    }
+
+    .device-name{
+      font-size:28px;font-weight:800;
+      color:#ffffff;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      max-width:500px;letter-spacing:-0.01em;
+      text-shadow:0 0 16px rgba(255,255,255,0.35);
+    }
+
+    /* ── Temperature Hero ── */
+    .temp-hero{
+      display:inline-flex;align-items:baseline;gap:8px;
+      padding:10px 24px;
+      border-radius:18px;margin-bottom:14px;width:fit-content;
+      border:1.5px solid rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      position:relative;z-index:1;
+      transition:color 0.3s;
+    }
+
+    .temp-val{
+      font-family:var(--mono);
+      font-size:88px;font-weight:900;
+      letter-spacing:-0.04em;line-height:1;
+      font-variant-numeric:tabular-nums;
+    }
+    .temp-deg{
+      font-family:var(--mono);
+      font-size:38px;font-weight:800;opacity:0.8;
+      align-self:flex-start;margin-top:6px;
+    }
+    .temp-tag{
+      font-size:18px;font-weight:800;
+      letter-spacing:0.08em;text-transform:uppercase;
+      color:#ffffff;background:rgba(255,255,255,0.1);
+      padding:4px 14px;border-radius:8px;
+      align-self:center;margin-left:6px;
+    }
+
+    /* ── Load Bar ── */
+    .load-row{
+      display:flex;align-items:center;gap:14px;
+      margin-bottom:14px;position:relative;z-index:1;
+    }
+    .load-lbl{
+      font-size:22px;font-weight:900;
+      letter-spacing:0.12em;text-transform:uppercase;
+      color:var(--t2);min-width:65px;
+    }
+    .bar-track{
+      flex:1;height:16px;
+      background:rgba(255,255,255,0.08);
+      border-radius:8px;overflow:visible;position:relative;
+    }
+    .bar-fill{
+      height:100%;width:0%;border-radius:8px;
+      transition:width 0.35s cubic-bezier(.4,0,.2,1),background 0.3s;
+      position:relative;
+    }
+    .bar-fill::after{
+      content:'';position:absolute;
+      right:-1px;top:50%;transform:translateY(-50%);
+      width:14px;height:14px;border-radius:50%;
+      background:currentColor;
+      box-shadow:0 0 10px 3px currentColor;
+      opacity:0.8;
+    }
+    .bar-val{
+      font-family:var(--mono);
+      font-size:36px;font-weight:900;
+      color:var(--t1);min-width:110px;text-align:right;
+      font-variant-numeric:tabular-nums;
+    }
+
+    /* ── Stats List (Large, Clear, High-Contrast) ── */
+    .stats{
+      display:flex;flex-direction:column;gap:0;
+      margin-top:auto;
+      border-top:1.5px solid rgba(255,255,255,0.1);
+      padding-top:12px;position:relative;z-index:1;
+    }
+    .stat{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+    .stat:last-child{border-bottom:none}
+    .stat-k{font-size:26px;font-weight:800;color:var(--t2);letter-spacing:-0.01em}
+    .stat-v{
+      font-family:var(--mono);font-size:36px;font-weight:900;
+      color:#ffffff;font-variant-numeric:tabular-nums;
+    }
+    .stat-v .u{font-size:22px;font-weight:800;color:#94a3b8;margin-left:4px}
+
+    /* ── Radial Gauges ── */
+    .gauge-wrap{
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      flex:1;position:relative;z-index:1;margin:6px 0;
+    }
+    .gauge-box{position:relative;width:170px;height:170px}
+    .gauge-box svg{
+      width:170px;height:170px;
+      transform:rotate(-90deg);
+      filter:drop-shadow(0 0 6px currentColor);
+    }
+    .gauge-bg{fill:none;stroke:rgba(255,255,255,0.07);stroke-width:15}
+    .gauge-arc{
+      fill:none;stroke-width:15;stroke-linecap:round;
+      transition:stroke-dashoffset 0.45s cubic-bezier(.4,0,.2,1),stroke 0.3s;
+    }
+    .gauge-center{
+      position:absolute;inset:0;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+    }
+    .gauge-pct{
+      font-family:var(--mono);font-size:54px;font-weight:900;
+      line-height:1;font-variant-numeric:tabular-nums;
+    }
+    .gauge-sub{
+      font-size:16px;font-weight:800;letter-spacing:0.09em;
+      color:var(--t2);text-transform:uppercase;margin-top:3px;
+    }
+    .temp-pill{
+      font-family:var(--mono);font-size:20px;font-weight:800;
+      padding:4px 14px;border-radius:999px;
+      border:1.5px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.06);
+      color:#ffffff;letter-spacing:0.02em;
+    }
+
+    /* ── FPS Card ── */
+    .fps-num{
+      font-family:var(--mono);
+      font-size:104px;font-weight:900;line-height:0.95;
+      letter-spacing:-0.04em;color:var(--fps);
+      text-shadow:0 0 40px var(--fps-glow);
+      font-variant-numeric:tabular-nums;
+      position:relative;z-index:1;
+    }
+    .fps-unit{font-size:28px;font-weight:800;color:var(--t2);margin-left:4px;letter-spacing:.04em}
+    .fps-ft{
+      font-family:var(--mono);font-size:24px;font-weight:800;
+      color:var(--t2);margin:8px 0 12px;position:relative;z-index:1;
+    }
+    .fps-ft span{color:#ffffff;font-weight:900}
+    .fps-lows{
+      display:grid;grid-template-columns:1fr 1fr;gap:12px;
+      margin-top:auto;position:relative;z-index:1;
+    }
+    .low-cell{
+      background:rgba(255,255,255,0.04);
+      border:1.5px solid var(--border);border-radius:14px;
+      padding:12px 16px;display:flex;flex-direction:column;gap:3px;
+    }
+    .low-lbl{font-size:18px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--t2)}
+    .low-val{
+      font-family:var(--mono);font-size:46px;font-weight:900;
+      color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;
+    }
+    .live-badge{
+      font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+      padding:5px 14px;border-radius:999px;
+      background:var(--fps-dim);border:1.5px solid rgba(251,146,60,.35);color:var(--fps);
+      display:flex;align-items:center;gap:6px;
+    }
+    .live-badge::before{
+      content:'';width:6px;height:6px;border-radius:50%;
+      background:var(--fps);animation:pdot 1.2s ease-in-out infinite;
+    }
+
+    /* ── Power Card & Listrik PLN (Huge, Prominent) ── */
+    .pwr-num{
+      font-family:var(--mono);font-size:104px;font-weight:900;
+      line-height:0.95;letter-spacing:-0.04em;color:var(--pwr);
+      text-shadow:0 0 38px var(--pwr-glow);
+      font-variant-numeric:tabular-nums;position:relative;z-index:1;
+    }
+    .pwr-unit{font-size:32px;font-weight:800;color:var(--t2);margin-left:4px}
+    .cost-panel{
+      margin-top:auto;
+      background:linear-gradient(135deg,rgba(74,222,128,.15) 0%,rgba(34,197,94,.05) 100%);
+      border:2px solid rgba(74,222,128,.35);border-radius:18px;
+      padding:16px 20px;display:flex;flex-direction:column;gap:6px;
+      cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;
+      position:relative;z-index:1;overflow:hidden;
+    }
+    .cost-panel::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(74,222,128,.5) 50%,transparent);
+    }
+    .cost-panel:hover{
+      border-color:rgba(74,222,128,.65);
+      box-shadow:0 0 28px rgba(74,222,128,.3);
+      transform:translateY(-1px);
+    }
+    .cost-amt{
+      font-family:var(--mono);font-size:50px;font-weight:900;
+      color:#4ade80;letter-spacing:-.03em;line-height:1;
+      text-shadow:0 0 24px rgba(74,222,128,.55);
+      font-variant-numeric:tabular-nums;
+    }
+    .cost-meta{display:flex;align-items:center;justify-content:space-between;margin-top:2px}
+    .cost-desc{font-size:18px;font-weight:800;color:#86efac;letter-spacing:.01em}
+    .cost-edit{
+      font-size:13px;font-weight:800;color:#86efac;
+      background:rgba(255,255,255,.08);padding:4px 10px;border-radius:6px;letter-spacing:.04em;
+    }
+
+    /* ── Gear Button ── */
+    .gear-btn{
+      width:38px;height:38px;border-radius:10px;
+      background:rgba(255,255,255,.07);border:1.5px solid var(--border-hi);
+      color:var(--t2);font-size:18px;
+      display:inline-flex;align-items:center;justify-content:center;
+      cursor:pointer;transition:background .2s,border-color .2s,color .2s,transform .3s;
+    }
+    .gear-btn:hover{
+      background:var(--green-dim);border-color:rgba(74,222,128,.45);
+      color:var(--green);transform:rotate(45deg);
+    }
+
+    /* ── Beacon ── */
+    .beacon{
+      position:fixed;top:16px;right:16px;
+      display:flex;align-items:center;gap:7px;
+      padding:6px 14px;border-radius:999px;
+      background:rgba(8,10,20,.88);
+      border:1.5px solid rgba(255,255,255,.1);
+      backdrop-filter:blur(12px);z-index:200;
+      transition:border-color .3s;
+    }
+    .beacon.live{border-color:rgba(74,222,128,.3)}
+    .beacon-dot{
+      width:8px;height:8px;border-radius:50%;
+      background:#ef4444;transition:background .3s,box-shadow .3s;
+    }
+    .beacon.live .beacon-dot{
+      background:#22c55e;box-shadow:0 0 10px #22c55e;
+      animation:pdot 1.8s ease-in-out infinite;
+    }
+    .beacon-lbl{font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--t3)}
+    .beacon.live .beacon-lbl{color:var(--t2)}
+
+    /* ── Modal ── */
+    .modal-overlay{
+      position:fixed;inset:0;
+      background:rgba(3,5,13,.9);
+      backdrop-filter:blur(22px);
+      z-index:1000;display:flex;align-items:center;justify-content:center;
+      animation:mfade .18s ease-out;
+    }
+    @keyframes mfade{from{opacity:0}to{opacity:1}}
+
+    .modal-card{
+      background:rgba(9,11,21,.98);
+      border:1.5px solid rgba(255,255,255,.12);
+      border-radius:24px;width:560px;max-width:92vw;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.04) inset,
+        0 48px 96px -24px rgba(0,0,0,1),
+        0 0 48px rgba(74,222,128,.08);
+      overflow:hidden;
+      animation:mslide .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes mslide{
+      from{opacity:0;transform:translateY(14px) scale(.97)}
+      to  {opacity:1;transform:translateY(0)    scale(1)}
+    }
+
+    .modal-head{
+      padding:22px 28px 18px;
+      display:flex;align-items:center;justify-content:space-between;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg,rgba(74,222,128,.05) 0%,transparent 100%);
+    }
+    .modal-title{display:flex;align-items:center;gap:10px}
+    .modal-dot{
+      width:10px;height:10px;border-radius:50%;
+      background:var(--green);box-shadow:0 0 10px var(--green);
+    }
+    .modal-title h3{font-size:18px;font-weight:800;color:var(--t1);letter-spacing:-.02em}
+    .modal-x{
+      background:rgba(255,255,255,.07);border:1px solid var(--border-hi);
+      color:var(--t2);width:32px;height:32px;border-radius:8px;
+      font-size:16px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      transition:background .2s,color .2s;
+    }
+    .modal-x:hover{background:rgba(255,255,255,.14);color:var(--t1)}
+
+    .modal-body{padding:22px 28px;display:flex;flex-direction:column;gap:16px}
+    .fg{display:flex;flex-direction:column;gap:6px}
+    .flbl{
+      font-size:13px;font-weight:800;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--t2);
+    }
+    .fctl{
+      background:rgba(255,255,255,.05);
+      border:1.5px solid rgba(255,255,255,.12);
+      border-radius:10px;padding:11px 15px;
+      color:var(--t1);font-family:'Inter',sans-serif;
+      font-size:15px;font-weight:600;outline:none;
+      transition:border-color .2s,box-shadow .2s,background .2s;
+    }
+    .fctl:focus{
+      border-color:rgba(74,222,128,.5);
+      box-shadow:0 0 0 3px rgba(74,222,128,.1);
+      background:rgba(255,255,255,.08);
+    }
+    .fctl option{background:#0c0f1c}
+    .frow{display:flex;gap:14px}
+    .frow .fg{flex:1}
+    .iwrap{position:relative;display:flex;align-items:center}
+    .iwrap .fctl{width:100%;padding-right:48px}
+    .iadd{
+      position:absolute;right:15px;
+      font-size:13px;font-weight:800;color:var(--t3);pointer-events:none;
+    }
+    .preview{
+      background:rgba(74,222,128,.06);
+      border:1.5px dashed rgba(74,222,128,.25);
+      border-radius:12px;padding:12px 16px;
+    }
+    .preview-lbl{
+      font-size:11px;font-weight:800;letter-spacing:.1em;
+      text-transform:uppercase;color:rgba(134,239,172,.75);margin-bottom:4px;
+    }
+    .preview-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--t1)}
+
+    .modal-foot{
+      padding:16px 28px 22px;
+      display:flex;align-items:center;justify-content:flex-end;gap:12px;
+      border-top:1px solid var(--border);
+    }
+    .btn{
+      padding:10px 22px;border-radius:10px;
+      font-size:14px;font-weight:800;cursor:pointer;
+      transition:all .18s ease;letter-spacing:.01em;
+    }
+    .btn-ghost{
+      background:rgba(255,255,255,.07);
+      border:1.5px solid rgba(255,255,255,.12);color:var(--t2);
+    }
+    .btn-ghost:hover{background:rgba(255,255,255,.12);color:var(--t1)}
+    .btn-primary{
+      background:#22c55e;border:1.5px solid transparent;
+      color:#052e12;box-shadow:0 0 20px rgba(34,197,94,.35);
+    }
+    .btn-primary:hover{background:#4ade80;box-shadow:0 0 28px rgba(74,222,128,.55);transform:translateY(-1px)}
+
+    .nil{color:var(--t3)!important;font-weight:400!important}
   </style>
 </head>
 <body>
 
-<div class="status-beacon" id="conn"></div>
+<div class="beacon" id="conn">
+  <div class="beacon-dot"></div>
+  <span class="beacon-lbl" id="conn-lbl">Connecting…</span>
+</div>
 
-<div class="hud-stage">
+<div class="stage">
 
-  <!-- ═══════════════ TOP ROW: CPU + GPU ═══════════════ -->
-  <div class="top-grid">
+  <!-- TOP ROW: CPU + GPU -->
+  <div class="row-top">
 
-    <!-- CPU Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--cpu); color:var(--cpu);"></div>
-          <span class="hud-title">CPU</span>
+    <!-- CPU -->
+    <div class="card card-cpu">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--cpu);box-shadow:0 0 9px var(--cpu-glow)"></div>
+          <span class="chip-label">CPU</span>
         </div>
-        <span class="hud-device-name" id="cpu-name">—</span>
+        <span class="device-name" id="cpu-name">—</span>
       </div>
 
-      <div class="hero-temp-box" id="cpu-temp-wrap" style="color:var(--cpu);">
-        <span class="hero-temp-val" id="cpu-temp">—</span>
-        <span class="hero-temp-unit">°C</span>
-        <span class="hero-temp-sub">Package</span>
+      <div class="temp-hero" id="cpu-temp-wrap" style="color:var(--cpu)">
+        <span class="temp-val" id="cpu-temp">—</span>
+        <span class="temp-deg">°C</span>
+        <span class="temp-tag">Package</span>
       </div>
 
-      <div class="meter-row">
-        <span class="meter-label">LOAD</span>
-        <div class="meter-track">
-          <div class="meter-fill" id="bar-cpu" style="background:var(--cpu); color:var(--cpu);"></div>
+      <div class="load-row">
+        <span class="load-lbl">LOAD</span>
+        <div class="bar-track">
+          <div class="bar-fill" id="bar-cpu" style="background:var(--cpu);color:var(--cpu)"></div>
         </div>
-        <span class="meter-val" id="cpu-load">—</span>
+        <span class="bar-val" id="cpu-load">—</span>
       </div>
 
-      <div class="stat-list">
-        <div class="stat-row">
-          <span class="stat-label">Core Clock</span>
-          <span class="stat-value" id="cpu-clock">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Package Power</span>
-          <span class="stat-value" id="cpu-power">—</span>
-        </div>
+      <div class="stats">
+        <div class="stat"><span class="stat-k">Core Clock</span><span class="stat-v" id="cpu-clock">—</span></div>
+        <div class="stat"><span class="stat-k">Package Power</span><span class="stat-v" id="cpu-power">—</span></div>
       </div>
     </div>
 
-    <!-- GPU Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--gpu); color:var(--gpu);"></div>
-          <span class="hud-title">GPU</span>
+    <!-- GPU -->
+    <div class="card card-gpu">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--gpu);box-shadow:0 0 9px var(--gpu-glow)"></div>
+          <span class="chip-label">GPU</span>
         </div>
-        <span class="hud-device-name" id="gpu-name">—</span>
+        <span class="device-name" id="gpu-name">—</span>
       </div>
 
-      <div class="hero-temp-box" id="gpu-temp-wrap" style="color:var(--gpu);">
-        <span class="hero-temp-val" id="gpu-temp">—</span>
-        <span class="hero-temp-unit">°C</span>
-        <span class="hero-temp-sub">Core</span>
+      <div class="temp-hero" id="gpu-temp-wrap" style="color:var(--gpu)">
+        <span class="temp-val" id="gpu-temp">—</span>
+        <span class="temp-deg">°C</span>
+        <span class="temp-tag">Core</span>
       </div>
 
-      <div class="meter-row">
-        <span class="meter-label">LOAD</span>
-        <div class="meter-track">
-          <div class="meter-fill" id="bar-gpu" style="background:var(--gpu); color:var(--gpu);"></div>
+      <div class="load-row">
+        <span class="load-lbl">LOAD</span>
+        <div class="bar-track">
+          <div class="bar-fill" id="bar-gpu" style="background:var(--gpu);color:var(--gpu)"></div>
         </div>
-        <span class="meter-val" id="gpu-load">—</span>
+        <span class="bar-val" id="gpu-load">—</span>
       </div>
 
-      <div class="stat-list">
-        <div class="stat-row">
-          <span class="stat-label">Hotspot</span>
-          <span class="stat-value" id="gpu-hotspot">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Core Clock</span>
-          <span class="stat-value" id="gpu-clock">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Fan Speed</span>
-          <span class="stat-value" id="gpu-fan">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Board Power</span>
-          <span class="stat-value" id="gpu-power">—</span>
-        </div>
+      <div class="stats">
+        <div class="stat"><span class="stat-k">Hotspot</span><span class="stat-v" id="gpu-hotspot">—</span></div>
+        <div class="stat"><span class="stat-k">Core Clock</span><span class="stat-v" id="gpu-clock">—</span></div>
+        <div class="stat"><span class="stat-k">Fan Speed</span><span class="stat-v" id="gpu-fan">—</span></div>
+        <div class="stat"><span class="stat-k">Board Power</span><span class="stat-v" id="gpu-power">—</span></div>
       </div>
     </div>
 
-  </div><!-- /top-grid -->
+  </div><!-- /row-top -->
 
-  <!-- ═══════════════ BOTTOM ROW: RAM / VRAM / FPS / POWER ═══════════════ -->
-  <div class="bot-grid">
+  <!-- BOTTOM ROW: RAM / VRAM / FPS / POWER -->
+  <div class="row-bot">
 
-    <!-- RAM Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--ram); color:var(--ram);"></div>
-          <span class="hud-title">RAM</span>
+    <!-- RAM -->
+    <div class="card card-ram">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--ram);box-shadow:0 0 9px var(--ram-glow)"></div>
+          <span class="chip-label">RAM</span>
         </div>
-        <span id="ram-clock" class="vram-temp-pill" style="display:none; color:var(--ram); background:rgba(52,211,153,0.18); border-color:rgba(52,211,153,0.5);"></span>
+        <span class="temp-pill" id="ram-clock" style="display:none"></span>
       </div>
 
-      <div class="gauge-container">
-        <div class="gauge-box">
-          <svg viewBox="0 0 150 150">
-            <circle class="gauge-bg" cx="75" cy="75" r="60"/>
-            <circle class="gauge-progress" id="g-ram" cx="75" cy="75" r="60"
-              stroke="var(--ram)" stroke-dasharray="376.99" stroke-dashoffset="376.99" style="color:var(--ram); box-shadow:0 0 16px currentColor;"/>
+      <div class="gauge-wrap">
+        <div class="gauge-box" style="color:var(--ram)">
+          <svg viewBox="0 0 170 170">
+            <circle class="gauge-bg"  cx="85" cy="85" r="68"/>
+            <circle class="gauge-arc" id="g-ram" cx="85" cy="85" r="68"
+              stroke="var(--ram)" stroke-dasharray="427.26" stroke-dashoffset="427.26"/>
           </svg>
-          <div class="gauge-center-text">
+          <div class="gauge-center">
             <span class="gauge-pct" id="ram-pct" style="color:var(--ram)">—</span>
-            <span class="gauge-pct-unit">% USED</span>
+            <span class="gauge-sub">% used</span>
           </div>
         </div>
       </div>
 
-      <div class="stat-list">
-        <div class="stat-row">
-          <span class="stat-label">Used</span>
-          <span class="stat-value" id="ram-used">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Total</span>
-          <span class="stat-value" id="ram-total">—</span>
-        </div>
+      <div class="stats">
+        <div class="stat"><span class="stat-k">Used</span><span class="stat-v" id="ram-used">—</span></div>
+        <div class="stat"><span class="stat-k">Total</span><span class="stat-v" id="ram-total">—</span></div>
       </div>
     </div>
 
-    <!-- VRAM Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--vram); color:var(--vram);"></div>
-          <span class="hud-title">VRAM</span>
+    <!-- VRAM -->
+    <div class="card card-vram">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--vram);box-shadow:0 0 9px var(--vram-glow)"></div>
+          <span class="chip-label">VRAM</span>
         </div>
-        <span class="vram-temp-pill" id="vram-temp-wrap">
+        <span class="temp-pill" id="vram-temp-wrap" style="display:none">
           <span id="vram-temp">—</span> °C
         </span>
       </div>
 
-      <div class="gauge-container">
-        <div class="gauge-box">
-          <svg viewBox="0 0 150 150">
-            <circle class="gauge-bg" cx="75" cy="75" r="60"/>
-            <circle class="gauge-progress" id="g-vram" cx="75" cy="75" r="60"
-              stroke="var(--vram)" stroke-dasharray="376.99" stroke-dashoffset="376.99"/>
+      <div class="gauge-wrap">
+        <div class="gauge-box" style="color:var(--vram)">
+          <svg viewBox="0 0 170 170">
+            <circle class="gauge-bg"  cx="85" cy="85" r="68"/>
+            <circle class="gauge-arc" id="g-vram" cx="85" cy="85" r="68"
+              stroke="var(--vram)" stroke-dasharray="427.26" stroke-dashoffset="427.26"/>
           </svg>
-          <div class="gauge-center-text">
+          <div class="gauge-center">
             <span class="gauge-pct" id="vram-pct" style="color:var(--vram)">—</span>
-            <span class="gauge-pct-unit">% USED</span>
+            <span class="gauge-sub">% used</span>
           </div>
         </div>
       </div>
 
-      <div class="stat-list">
-        <div class="stat-row">
-          <span class="stat-label">Used</span>
-          <span class="stat-value" id="vram-used">—</span>
+      <div class="stats">
+        <div class="stat"><span class="stat-k">Used</span><span class="stat-v" id="vram-used">—</span></div>
+        <div class="stat"><span class="stat-k">Total</span><span class="stat-v" id="vram-total">—</span></div>
+        <div class="stat"><span class="stat-k">Clock</span><span class="stat-v" id="vram-clock">—</span></div>
+      </div>
+    </div>
+
+    <!-- FPS -->
+    <div class="card card-fps">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--fps);box-shadow:0 0 9px var(--fps-glow)"></div>
+          <span class="chip-label">FPS</span>
         </div>
-        <div class="stat-row">
-          <span class="stat-label">Total</span>
-          <span class="stat-value" id="vram-total">—</span>
+        <span class="live-badge">RTSS Live</span>
+      </div>
+
+      <div style="position:relative;z-index:1">
+        <span class="fps-num" id="fps-cur">—</span><span class="fps-unit">fps</span>
+      </div>
+
+      <div class="fps-ft">Frametime: <span id="fps-ft">—</span> ms</div>
+
+      <div class="fps-lows">
+        <div class="low-cell">
+          <span class="low-lbl">1% Low</span>
+          <span class="low-val nil" id="fps-1p">—</span>
         </div>
-        <div class="stat-row">
-          <span class="stat-label">Clock</span>
-          <span class="stat-value" id="vram-clock">—</span>
+        <div class="low-cell">
+          <span class="low-lbl">0.1% Low</span>
+          <span class="low-val nil" id="fps-01p">—</span>
         </div>
       </div>
     </div>
 
-    <!-- FPS Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--fps); color:var(--fps);"></div>
-          <span class="hud-title">FPS</span>
+    <!-- POWER & LISTRIK PLN -->
+    <div class="card card-pwr">
+      <div class="card-head">
+        <div class="chip">
+          <div class="chip-dot" style="background:var(--pwr);box-shadow:0 0 9px var(--pwr-glow)"></div>
+          <span class="chip-label">Power</span>
         </div>
-        <span class="fps-live-badge">RTSS LIVE</span>
+        <button class="gear-btn" id="btn-gear" type="button" title="Pengaturan Tarif PLN">⚙</button>
       </div>
 
-      <div class="fps-hero">
-        <span class="fps-main-num" id="fps-cur">—</span>
-        <span class="fps-label-text">FPS</span>
+      <div style="position:relative;z-index:1">
+        <span class="pwr-num" id="pwr-val">—</span><span class="pwr-unit">W</span>
       </div>
 
-      <div class="fps-frametime">Frametime: <span id="fps-ft">—</span> ms</div>
-
-      <div class="fps-lows-grid">
-        <div class="fps-low-card">
-          <span class="fps-low-title">1% Low</span>
-          <span class="fps-low-val nil" id="fps-1p">—</span>
-        </div>
-        <div class="fps-low-card">
-          <span class="fps-low-title">0.1% Low</span>
-          <span class="fps-low-val nil" id="fps-01p">—</span>
+      <div class="cost-panel" id="cost-panel" title="Klik untuk ubah tarif listrik">
+        <span class="cost-amt" id="pwr-cost">—</span>
+        <div class="cost-meta">
+          <span class="cost-desc" id="pwr-cost-sub">Est. Biaya Listrik PLN / bln</span>
+          <span class="cost-edit">⚙ Ubah</span>
         </div>
       </div>
     </div>
 
-    <!-- Power Card -->
-    <div class="hud-card">
-      <div class="hud-header">
-        <div class="hud-tag">
-          <div class="hud-dot" style="background:var(--pwr); color:var(--pwr);"></div>
-          <span class="hud-title">POWER</span>
-        </div>
-        <button class="hud-settings-btn" id="btn-open-pln-settings" type="button" title="Pengaturan Tarif Listrik PLN">⚙️</button>
-      </div>
+  </div><!-- /row-bot -->
 
-      <div class="pwr-hero">
-        <span class="pwr-main-val" id="pwr-val">—</span>
-        <span class="pwr-main-unit">W</span>
-      </div>
-
-      <div class="cost-box" id="cost-box-click" title="Klik untuk ubah tarif & jam pemakaian listrik">
-        <span class="cost-main" id="pwr-cost">—</span>
-        <div class="cost-sub">
-          <span id="pwr-cost-sub">Est. Biaya Listrik PLN / bln</span>
-          <span class="cost-sub-hint">⚙️ Ubah</span>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /bot-grid -->
-
-</div><!-- /hud-stage -->
+</div><!-- /stage -->
 
 <!-- PLN Settings Modal -->
-<div class="pln-modal-overlay" id="pln-modal" style="display: none;">
-  <div class="pln-modal-card">
-    <div class="pln-modal-header">
-      <div class="pln-modal-title">
-        <span class="pln-modal-dot"></span>
+<div class="modal-overlay" id="pln-modal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="modal-title">
+        <div class="modal-dot"></div>
         <h3>Kustomisasi Biaya Listrik PLN</h3>
       </div>
-      <button class="pln-modal-close" id="btn-close-pln-modal" type="button">&times;</button>
+      <button class="modal-x" id="btn-close-modal" type="button">✕</button>
     </div>
 
-    <div class="pln-modal-body">
-      <div class="pln-form-group">
-        <label class="pln-label">Golongan Daya Listrik PLN</label>
-        <select class="pln-select" id="pln-select-tier">
-          <option value="900_nonsubsidi" data-rate="1352" data-label="900 VA">900 VA (R-1/TR Non-Subsidi) — Rp 1.352 / kWh</option>
-          <option value="1300_2200" data-rate="1444.7" data-label="1300/2200 VA">1.300 VA & 2.200 VA (R-1/TR) — Rp 1.444,70 / kWh</option>
-          <option value="3500_5500" data-rate="1699.53" data-label="3500-5500 VA">3.500 VA – 5.500 VA (R-2/TR) — Rp 1.699,53 / kWh</option>
-          <option value="6600_up" data-rate="1699.53" data-label="6600 VA+">6.600 VA ke atas (R-3/TR) — Rp 1.699,53 / kWh</option>
-          <option value="900_subsidi" data-rate="605" data-label="900 VA Subsidi">900 VA (R-1/TR Bersubsidi) — Rp 605 / kWh</option>
-          <option value="450_subsidi" data-rate="415" data-label="450 VA Subsidi">450 VA (R-1/TR Bersubsidi) — Rp 415 / kWh</option>
-          <option value="custom" data-rate="0" data-label="Custom">Tarif Kustom (Input Manual Rp/kWh)</option>
+    <div class="modal-body">
+      <div class="fg">
+        <label class="flbl">Golongan Daya Listrik PLN</label>
+        <select class="fctl" id="pln-select-tier">
+          <option value="900_nonsubsidi" data-rate="1352"    data-label="900 VA">900 VA (R-1/TR Non-Subsidi) — Rp 1.352 / kWh</option>
+          <option value="1300_2200"      data-rate="1444.7"  data-label="1300/2200 VA">1.300 VA &amp; 2.200 VA (R-1/TR) — Rp 1.444,70 / kWh</option>
+          <option value="3500_5500"      data-rate="1699.53" data-label="3500-5500 VA">3.500 VA – 5.500 VA (R-2/TR) — Rp 1.699,53 / kWh</option>
+          <option value="6600_up"        data-rate="1699.53" data-label="6600 VA+">6.600 VA ke atas (R-3/TR) — Rp 1.699,53 / kWh</option>
+          <option value="900_subsidi"    data-rate="605"     data-label="900 VA Subsidi">900 VA (R-1/TR Bersubsidi) — Rp 605 / kWh</option>
+          <option value="450_subsidi"    data-rate="415"     data-label="450 VA Subsidi">450 VA (R-1/TR Bersubsidi) — Rp 415 / kWh</option>
+          <option value="custom"         data-rate="0"       data-label="Custom">Tarif Kustom (Input Manual Rp/kWh)</option>
         </select>
       </div>
 
-      <div class="pln-form-group" id="pln-custom-rate-group" style="display: none;">
-        <label class="pln-label">Tarif Manual (Rp per kWh)</label>
-        <input type="number" class="pln-input" id="pln-input-custom-rate" min="1" step="0.01" value="1352" placeholder="Contoh: 1444.70">
+      <div class="fg" id="pln-custom-group" style="display:none">
+        <label class="flbl">Tarif Manual (Rp per kWh)</label>
+        <input type="number" class="fctl" id="pln-custom-rate" min="1" step="0.01" value="1352" placeholder="Contoh: 1444.70">
       </div>
 
-      <div class="pln-form-row">
-        <div class="pln-form-group" style="flex: 1;">
-          <label class="pln-label">Jam Pemakaian / Hari</label>
-          <div class="pln-input-range-wrap">
-            <input type="number" class="pln-input" id="pln-input-hours" min="1" max="24" value="8">
-            <span class="pln-input-addon">Jam</span>
+      <div class="frow">
+        <div class="fg">
+          <label class="flbl">Jam Pemakaian / Hari</label>
+          <div class="iwrap">
+            <input type="number" class="fctl" id="pln-hours" min="1" max="24" value="8">
+            <span class="iadd">Jam</span>
           </div>
         </div>
-
-        <div class="pln-form-group" style="flex: 1;">
-          <label class="pln-label">Hari / Bulan</label>
-          <div class="pln-input-range-wrap">
-            <input type="number" class="pln-input" id="pln-input-days" min="1" max="31" value="30">
-            <span class="pln-input-addon">Hari</span>
+        <div class="fg">
+          <label class="flbl">Hari / Bulan</label>
+          <div class="iwrap">
+            <input type="number" class="fctl" id="pln-days" min="1" max="31" value="30">
+            <span class="iadd">Hari</span>
           </div>
         </div>
       </div>
 
-      <div class="pln-preview-box">
-        <div class="pln-preview-label">Rumus Estimasi:</div>
-        <div class="pln-preview-val" id="pln-preview-formula">(Watt / 1000) × 8 jam × 30 hari × Rp 1.352</div>
+      <div class="preview">
+        <div class="preview-lbl">Rumus Estimasi</div>
+        <div class="preview-val" id="pln-formula">(Watt / 1000) × 8 jam × 30 hari × Rp 1.352</div>
       </div>
     </div>
 
-    <div class="pln-modal-footer">
-      <button class="pln-btn pln-btn-secondary" id="btn-reset-pln" type="button">Reset Default</button>
-      <button class="pln-btn pln-btn-primary" id="btn-save-pln" type="button">Simpan Pengaturan</button>
+    <div class="modal-foot">
+      <button class="btn btn-ghost"   id="btn-reset-pln" type="button">Reset Default</button>
+      <button class="btn btn-primary" id="btn-save-pln"  type="button">Simpan Pengaturan</button>
     </div>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const CIRC = 2 * Math.PI * 60; // r=60 for circular gauges
+const CIRC = 2 * Math.PI * 68; // r=68 → 427.26
 
-function sv(el, val, unit = '', d = 0) {
-  if (val == null) {
-    el.innerHTML = '—';
-    el.classList.add('nil');
-  } else {
-    el.innerHTML = Number(val).toFixed(d) + (unit ? `<span class="unit">${unit}</span>` : '');
-    el.classList.remove('nil');
-  }
+function sv(el, val, unit='', d=0) {
+  if (val == null) { el.innerHTML='—'; el.classList.add('nil'); }
+  else { el.innerHTML=Number(val).toFixed(d)+(unit?`<span class="u">${unit}</span>`:''); el.classList.remove('nil'); }
 }
 
-function setMeter(id, pct, baseColor) {
-  const el = $(id);
-  el.style.width = Math.min(100, Math.max(0, pct || 0)) + '%';
-  el.style.background = pct >= 90 ? 'var(--hot)' : pct >= 80 ? 'var(--warn)' : baseColor;
+function setBar(id, pct, base) {
+  const el=$(id), w=Math.min(100,Math.max(0,pct||0));
+  el.style.width=w+'%';
+  const c=pct>=90?'var(--hot)':pct>=80?'var(--warn)':base;
+  el.style.background=c; el.style.color=c;
 }
 
-function setGauge(circleId, pctEl, pct, color) {
-  const circle = $(circleId);
-  const offset = CIRC * (1 - Math.min(100, Math.max(0, pct || 0)) / 100);
-  circle.style.strokeDashoffset = offset;
-  const c = pct >= 90 ? 'var(--hot)' : pct >= 80 ? 'var(--warn)' : color;
-  circle.style.stroke = c;
-  $(pctEl).textContent = pct != null ? Math.round(pct) : '—';
-  $(pctEl).style.color = c;
+function setGauge(arcId, pctId, pct, base) {
+  const arc=$(arcId);
+  arc.style.strokeDashoffset = CIRC*(1-Math.min(100,Math.max(0,pct||0))/100);
+  const c=pct>=90?'var(--hot)':pct>=80?'var(--warn)':base;
+  arc.style.stroke=c;
+  const pe=$(pctId);
+  pe.textContent=pct!=null?Math.round(pct):'—';
+  pe.style.color=c;
 }
 
-function tempColor(t) {
-  return t >= 85 ? 'var(--hot)' : t >= 75 ? 'var(--warn)' : null;
-}
+function tempColor(t) { return t>=85?'var(--hot)':t>=75?'var(--warn)':null; }
 
-function shortName(name) {
-  if (!name) return null;
-  return name.replace(/AMD Radeon\s*/i,'').replace(/NVIDIA GeForce\s*/i,'')
-             .replace(/Intel Core\s*/i,'').replace(/AMD Ryzen\s*/i,'Ryzen ')
-             .trim().substring(0, 32);
+function shortName(n) {
+  if(!n) return null;
+  return n.replace(/AMD Radeon\s*/i,'').replace(/NVIDIA GeForce\s*/i,'')
+          .replace(/Intel Core\s*/i,'').replace(/AMD Ryzen\s*/i,'Ryzen ')
+          .trim().substring(0,38);
 }
 
 function connect() {
-  const beacon = $('conn');
-  const isSecure = location.protocol === 'https:';
-  const wsProtocol = isSecure ? 'wss://' : 'ws://';
-  let wsUrl = '';
-  
-  if (isSecure) {
-    wsUrl = wsProtocol + 'ws.' + location.hostname;
-  } else {
-    const host = location.hostname || 'localhost';
-    wsUrl = wsProtocol + host + ':{{_wsPort}}';
-  }
+  const bcon=$('conn'), lbl=$('conn-lbl');
+  const isS=location.protocol==='https:';
+  const proto=isS?'wss://':'ws://';
+  const host=location.hostname||'localhost';
+  const url=isS?proto+'ws.'+location.hostname:proto+host+':{{{_wsPort}}}';
 
-  const ws = new WebSocket(wsUrl);
-  ws.onopen  = () => beacon.className = 'status-beacon active';
-  ws.onclose = () => { beacon.className = 'status-beacon'; setTimeout(connect, 2000); };
-  ws.onerror = () => beacon.className = 'status-beacon';
+  const ws=new WebSocket(url);
+  ws.onopen  =()=>{ bcon.className='beacon live'; lbl.textContent='Connected'; };
+  ws.onclose =()=>{ bcon.className='beacon'; lbl.textContent='Reconnecting…'; setTimeout(connect,2000); };
+  ws.onerror =()=>{ bcon.className='beacon'; lbl.textContent='Error'; };
 
-  ws.onmessage = ({ data }) => {
-    let d; try { d = JSON.parse(data); } catch { return; }
+  ws.onmessage=({data})=>{
+    let d; try{d=JSON.parse(data);}catch{return}
 
-    // Device Labels
-    $('cpu-name').textContent = shortName(d.device?.cpuName) || '—';
-    $('gpu-name').textContent = shortName(d.device?.gpuName) || '—';
+    $('cpu-name').textContent=shortName(d.device?.cpuName)||'—';
+    $('gpu-name').textContent=shortName(d.device?.gpuName)||'—';
 
-    // ── CPU ──
-    const ct = d.cpu?.temp;
-    if (ct != null) {
-      $('cpu-temp').textContent = Number(ct).toFixed(1);
-      const tc = tempColor(ct);
-      $('cpu-temp-wrap').style.color = tc || 'var(--cpu)';
-      $('cpu-temp-wrap').style.borderColor = tc || 'rgba(56,189,248,0.3)';
-    }
+    // CPU
+    const ct=d.cpu?.temp;
+    if(ct!=null){$('cpu-temp').textContent=Number(ct).toFixed(1);$('cpu-temp-wrap').style.color=tempColor(ct)||'var(--cpu)';}
     sv($('cpu-load'),  d.cpu?.load,  '%',   1);
     sv($('cpu-clock'), d.cpu?.clock, 'MHz', 0);
     sv($('cpu-power'), d.cpu?.power, 'W',   1);
-    if (d.cpu?.load != null) setMeter('bar-cpu', d.cpu.load, 'var(--cpu)');
+    if(d.cpu?.load!=null) setBar('bar-cpu',d.cpu.load,'var(--cpu)');
 
-    // ── GPU ──
-    const gt = d.gpu?.temp;
-    if (gt != null) {
-      $('gpu-temp').textContent = Number(gt).toFixed(1);
-      const tc = tempColor(gt);
-      $('gpu-temp-wrap').style.color = tc || 'var(--gpu)';
-      $('gpu-temp-wrap').style.borderColor = tc || 'rgba(192,132,252,0.3)';
-    }
+    // GPU
+    const gt=d.gpu?.temp;
+    if(gt!=null){$('gpu-temp').textContent=Number(gt).toFixed(1);$('gpu-temp-wrap').style.color=tempColor(gt)||'var(--gpu)';}
     sv($('gpu-load'),    d.gpu?.load,        '%',   1);
     sv($('gpu-hotspot'), d.gpu?.hotSpotTemp, '°C',  1);
     sv($('gpu-clock'),   d.gpu?.coreClock,   'MHz', 0);
     sv($('gpu-fan'),     d.gpu?.fanRpm,      'RPM', 0);
     sv($('gpu-power'),   d.gpu?.power,       'W',   1);
-    if (d.gpu?.load != null) setMeter('bar-gpu', d.gpu.load, 'var(--gpu)');
+    if(d.gpu?.load!=null) setBar('bar-gpu',d.gpu.load,'var(--gpu)');
 
-    // ── RAM ──
-    setGauge('g-ram', 'ram-pct', d.mem?.load, 'var(--ram)');
-    sv($('ram-used'),  d.mem?.usedGb,  'GB', 2);
-    sv($('ram-total'), d.mem?.totalGb, 'GB', 1);
-    if (d.mem?.clock != null) {
-      $('ram-clock').textContent = d.mem.clock + ' MHz';
-      $('ram-clock').style.display = 'inline-block';
-    } else {
-      $('ram-clock').style.display = 'none';
-    }
+    // RAM
+    setGauge('g-ram','ram-pct',d.mem?.load,'var(--ram)');
+    sv($('ram-used'),  d.mem?.usedGb,  'GB',2);
+    sv($('ram-total'), d.mem?.totalGb, 'GB',1);
+    const rc=$('ram-clock');
+    if(d.mem?.clock!=null){rc.textContent=d.mem.clock+' MHz';rc.style.display='';}
+    else rc.style.display='none';
 
-    // ── VRAM ──
-    const vt = d.gpu?.hotSpotTemp ?? d.gpu?.temp;
-    if (vt != null) {
-      $('vram-temp').textContent = Number(vt).toFixed(1);
-      $('vram-temp-wrap').style.display = 'inline-block';
-    } else {
-      $('vram-temp-wrap').style.display = 'none';
-    }
-    setGauge('g-vram', 'vram-pct', d.gpu?.vramPct, 'var(--vram)');
-    sv($('vram-used'),  d.gpu?.vramUsedGb,  'GB', 2);
-    sv($('vram-total'), d.gpu?.vramTotalGb, 'GB', 1);
-    sv($('vram-clock'), d.gpu?.memClock,    'MHz', 0);
+    // VRAM
+    const vt=d.gpu?.hotSpotTemp??d.gpu?.temp;
+    const vtw=$('vram-temp-wrap');
+    if(vt!=null){$('vram-temp').textContent=Number(vt).toFixed(1);vtw.style.display='';}
+    else vtw.style.display='none';
+    setGauge('g-vram','vram-pct',d.gpu?.vramPct,'var(--vram)');
+    sv($('vram-used'),  d.gpu?.vramUsedGb,  'GB',2);
+    sv($('vram-total'), d.gpu?.vramTotalGb, 'GB',1);
+    sv($('vram-clock'), d.gpu?.memClock,    'MHz',0);
 
-    // ── FPS ──
-    const fc = d.fps?.current, ft = d.fps?.frametimeMs;
-    const f1 = d.fps?.low1pct, f0 = d.fps?.low01pct;
-    $('fps-cur').textContent = fc != null ? Math.round(fc) : '—';
-    $('fps-ft').textContent  = ft != null ? Number(ft).toFixed(2) : '—';
-    
-    const e1 = $('fps-1p'), e01 = $('fps-01p');
-    if (f1 != null) { e1.textContent = Math.round(f1); e1.classList.remove('nil'); }
-    else            { e1.textContent = '—'; e1.classList.add('nil'); }
-    if (f0 != null) { e01.textContent = Math.round(f0); e01.classList.remove('nil'); }
-    else            { e01.textContent = '—'; e01.classList.add('nil'); }
+    // FPS
+    const fc=d.fps?.current,ft=d.fps?.frametimeMs,f1=d.fps?.low1pct,f0=d.fps?.low01pct;
+    $('fps-cur').textContent=fc!=null?Math.round(fc):'—';
+    $('fps-ft').textContent =ft!=null?Number(ft).toFixed(2):'—';
+    const e1=$('fps-1p'),e01=$('fps-01p');
+    if(f1!=null){e1.textContent=Math.round(f1);  e1.classList.remove('nil');}else{e1.textContent='—';  e1.classList.add('nil');}
+    if(f0!=null){e01.textContent=Math.round(f0); e01.classList.remove('nil');}else{e01.textContent='—';e01.classList.add('nil');}
 
-    // ── Power & PLN Cost ──
-    const pw = d.power?.totalW;
-    $('pwr-val').textContent = pw != null ? Number(pw).toFixed(1) : '—';
-    renderPlnCost(pw);
+    // Power
+    const pw=d.power?.totalW;
+    $('pwr-val').textContent=pw!=null?Number(pw).toFixed(1):'—';
+    renderCost(pw);
   };
 }
 
-// ── PLN Settings & Reactive Logic ──
-const DEFAULT_PLN = {
-  tier: '900_nonsubsidi',
-  rate: 1352.0,
-  hours: 8,
-  days: 30,
-  label: '900 VA'
-};
+// PLN settings
+const DFLT={tier:'900_nonsubsidi',rate:1352.0,hours:8,days:30,label:'900 VA'};
+let pln={...DFLT};
+try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s)pln={...DFLT,...JSON.parse(s)};}catch{}
 
-let plnCfg = { ...DEFAULT_PLN };
-try {
-  const saved = localStorage.getItem('legaxyy_pln_cfg');
-  if (saved) {
-    plnCfg = { ...DEFAULT_PLN, ...JSON.parse(saved) };
-  }
-} catch (e) { }
-
-function updatePlnSublabel() {
-  const subEl = $('pwr-cost-sub');
-  if (subEl) {
-    subEl.textContent = `Est. Biaya Listrik PLN (${plnCfg.label} • ${plnCfg.hours} jam/hr)`;
-  }
+function renderCostLabel(){
+  $('pwr-cost-sub').textContent=`Est. Biaya PLN (${pln.label} · ${pln.hours}h/hari) / bln`;
+}
+function renderCost(w){
+  if(w!=null&&!isNaN(w)){
+    const c=(w/1000)*pln.hours*pln.days*pln.rate;
+    $('pwr-cost').textContent='Rp '+Math.round(c).toLocaleString('id-ID');
+  }else $('pwr-cost').textContent='—';
+}
+function updateFormula(){
+  $('pln-formula').textContent=`(Watt / 1000) × ${pln.hours} jam × ${pln.days} hari × Rp ${Number(pln.rate).toLocaleString('id-ID')}`;
 }
 
-function calculateMonthlyCost(watts) {
-  if (watts == null || isNaN(watts)) return null;
-  const kwhPerMonth = (watts / 1000) * plnCfg.hours * plnCfg.days;
-  return kwhPerMonth * plnCfg.rate;
+const modal=$('pln-modal');
+const tierSel=$('pln-select-tier');
+const cgrp=$('pln-custom-group');
+const cIn=$('pln-custom-rate');
+const hIn=$('pln-hours');
+const dIn=$('pln-days');
+
+function openModal(){
+  tierSel.value=pln.tier||'900_nonsubsidi';
+  cgrp.style.display=tierSel.value==='custom'?'flex':'none';
+  if(tierSel.value==='custom')cIn.value=pln.rate;
+  hIn.value=pln.hours; dIn.value=pln.days;
+  updateFormula(); modal.style.display='flex';
 }
+function closeModal(){modal.style.display='none';}
 
-function renderPlnCost(watts) {
-  if (watts != null && !isNaN(watts)) {
-    const cost = calculateMonthlyCost(watts);
-    $('pwr-cost').textContent = 'Rp ' + Math.round(cost).toLocaleString('id-ID');
-  } else {
-    $('pwr-cost').textContent = '—';
-  }
+$('btn-gear').addEventListener('click',e=>{e.stopPropagation();openModal();});
+$('cost-panel').addEventListener('click',openModal);
+$('btn-close-modal').addEventListener('click',closeModal);
+modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+
+tierSel.addEventListener('change',()=>{
+  if(tierSel.value==='custom'){cgrp.style.display='flex';pln.rate=Math.max(1,parseFloat(cIn.value)||1352);pln.label='Custom';}
+  else{cgrp.style.display='none';const o=tierSel.selectedOptions[0];pln.rate=parseFloat(o.getAttribute('data-rate'));pln.label=o.getAttribute('data-label');}
+  updateFormula();
+});
+cIn.addEventListener('input',()=>{if(tierSel.value==='custom'){pln.rate=Math.max(1,parseFloat(cIn.value)||1352);updateFormula();}});
+hIn.addEventListener('input',()=>{pln.hours=Math.max(1,Math.min(24,parseInt(hIn.value)||8));updateFormula();});
+dIn.addEventListener('input',()=>{pln.days =Math.max(1,Math.min(31,parseInt(dIn.value)||30));updateFormula();});
+
+$('btn-save-pln').addEventListener('click',()=>{
+  pln.tier=tierSel.value;
+  if(pln.tier==='custom'){pln.rate=Math.max(1,parseFloat(cIn.value)||1352);pln.label='Custom';}
+  else{const o=tierSel.selectedOptions[0];pln.rate=parseFloat(o.getAttribute('data-rate'));pln.label=o.getAttribute('data-label');}
+  pln.hours=Math.max(1,Math.min(24,parseInt(hIn.value)||8));
+  pln.days =Math.max(1,Math.min(31,parseInt(dIn.value)||30));
+  try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
+  renderCostLabel(); closeModal();
+  const pw=parseFloat($('pwr-val').textContent);
+  if(!isNaN(pw))renderCost(pw);
+});
+
+$('btn-reset-pln').addEventListener('click',()=>{
+  pln={...DFLT};
+  try{localStorage.removeItem('legaxyy_pln_cfg');}catch{}
+  tierSel.value=pln.tier; cgrp.style.display='none';
+  hIn.value=pln.hours; dIn.value=pln.days;
+  updateFormula(); renderCostLabel();
+});
+
+renderCostLabel();
+
+function autoScale(){
+  const sx=window.innerWidth/1920,sy=window.innerHeight/1080,s=Math.min(sx,sy);
+  const el=document.body;
+  el.style.transform=`scale(${s})`;
+  el.style.transformOrigin='top left';
+  el.style.left=`${Math.max(0,(window.innerWidth-1920*s)/2)}px`;
+  el.style.top =`${Math.max(0,(window.innerHeight-1080*s)/2)}px`;
 }
-
-function updateFormulaPreview() {
-  const fEl = $('pln-preview-formula');
-  if (fEl) {
-    const rateDisp = Number(plnCfg.rate).toLocaleString('id-ID');
-    fEl.textContent = `(Watt / 1000) × ${plnCfg.hours} jam × ${plnCfg.days} hari × Rp ${rateDisp}`;
-  }
-}
-
-const plnModal = $('pln-modal');
-const tierSelect = $('pln-select-tier');
-const customGroup = $('pln-custom-rate-group');
-const customInput = $('pln-input-custom-rate');
-const hoursInput = $('pln-input-hours');
-const daysInput = $('pln-input-days');
-
-function openPlnModal() {
-  tierSelect.value = plnCfg.tier || '900_nonsubsidi';
-  if (tierSelect.value === 'custom') {
-    customGroup.style.display = 'flex';
-    customInput.value = plnCfg.rate;
-  } else {
-    customGroup.style.display = 'none';
-  }
-  hoursInput.value = plnCfg.hours;
-  daysInput.value = plnCfg.days;
-  updateFormulaPreview();
-  plnModal.style.display = 'flex';
-}
-
-function closePlnModal() {
-  plnModal.style.display = 'none';
-}
-
-$('btn-open-pln-settings').addEventListener('click', (e) => { e.stopPropagation(); openPlnModal(); });
-$('cost-box-click').addEventListener('click', () => openPlnModal());
-$('btn-close-pln-modal').addEventListener('click', () => closePlnModal());
-plnModal.addEventListener('click', (e) => {
-  if (e.target === plnModal) closePlnModal();
-});
-
-tierSelect.addEventListener('change', () => {
-  if (tierSelect.value === 'custom') {
-    customGroup.style.display = 'flex';
-    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
-    plnCfg.label = 'Custom';
-  } else {
-    customGroup.style.display = 'none';
-    const opt = tierSelect.selectedOptions[0];
-    plnCfg.rate = parseFloat(opt.getAttribute('data-rate'));
-    plnCfg.label = opt.getAttribute('data-label');
-  }
-  updateFormulaPreview();
-});
-
-customInput.addEventListener('input', () => {
-  if (tierSelect.value === 'custom') {
-    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
-    updateFormulaPreview();
-  }
-});
-
-hoursInput.addEventListener('input', () => {
-  plnCfg.hours = Math.max(1, Math.min(24, parseInt(hoursInput.value) || 8));
-  updateFormulaPreview();
-});
-
-daysInput.addEventListener('input', () => {
-  plnCfg.days = Math.max(1, Math.min(31, parseInt(daysInput.value) || 30));
-  updateFormulaPreview();
-});
-
-$('btn-save-pln').addEventListener('click', () => {
-  plnCfg.tier = tierSelect.value;
-  if (plnCfg.tier === 'custom') {
-    plnCfg.rate = Math.max(1, parseFloat(customInput.value) || 1352);
-    plnCfg.label = 'Custom';
-  } else {
-    const opt = tierSelect.selectedOptions[0];
-    plnCfg.rate = parseFloat(opt.getAttribute('data-rate'));
-    plnCfg.label = opt.getAttribute('data-label');
-  }
-  plnCfg.hours = Math.max(1, Math.min(24, parseInt(hoursInput.value) || 8));
-  plnCfg.days = Math.max(1, Math.min(31, parseInt(daysInput.value) || 30));
-
-  try {
-    localStorage.setItem('legaxyy_pln_cfg', JSON.stringify(plnCfg));
-  } catch (e) { }
-
-  updatePlnSublabel();
-  closePlnModal();
-
-  const curPw = parseFloat($('pwr-val').textContent);
-  if (!isNaN(curPw)) {
-    renderPlnCost(curPw);
-  }
-});
-
-$('btn-reset-pln').addEventListener('click', () => {
-  plnCfg = { ...DEFAULT_PLN };
-  try { localStorage.removeItem('legaxyy_pln_cfg'); } catch (e) { }
-  tierSelect.value = plnCfg.tier;
-  customGroup.style.display = 'none';
-  hoursInput.value = plnCfg.hours;
-  daysInput.value = plnCfg.days;
-  updateFormulaPreview();
-  updatePlnSublabel();
-});
-
-updatePlnSublabel();
-
-function autoScale() {
-  const scaleX = window.innerWidth / 1920;
-  const scaleY = window.innerHeight / 1080;
-  const scale = Math.min(scaleX, scaleY);
-  const el = document.body;
-  el.style.transform = `scale(${scale})`;
-  el.style.transformOrigin = 'top left';
-  const offsetX = (window.innerWidth - 1920 * scale) / 2;
-  const offsetY = (window.innerHeight - 1080 * scale) / 2;
-  el.style.left = `${Math.max(0, offsetX)}px`;
-  el.style.top = `${Math.max(0, offsetY)}px`;
-}
-
-window.addEventListener('resize', autoScale);
-window.addEventListener('DOMContentLoaded', autoScale);
+window.addEventListener('resize',autoScale);
+window.addEventListener('DOMContentLoaded',autoScale);
 autoScale();
 connect();
 </script>

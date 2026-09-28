@@ -15,6 +15,7 @@ SetupIconFile=AppIcon.ico
 
 [Files]
 Source: "..\App\LegaxyyFPS.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\App\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\App\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\App\index.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\App\Uninstall_Overlay.bat"; DestDir: "{app}"; Flags: ignoreversion
