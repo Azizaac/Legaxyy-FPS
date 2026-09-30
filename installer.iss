@@ -18,8 +18,8 @@ Source: "dist\App\LegaxyyFPS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\Uninstall_Overlay.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "dist\App\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
-Source: "dist\App\MSIAfterburnerSetup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+Source: "dist\App\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall skipifsourcedoesntexist
+Source: "dist\App\MSIAfterburnerSetup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\LegaxyyFPS"; Filename: "{app}\LegaxyyFPS.exe"

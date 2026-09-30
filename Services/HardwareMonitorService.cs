@@ -225,15 +225,15 @@ public sealed class HardwareMonitorService : IDisposable
     {
         float? vramUsed  = null;
         float? vramTotal = null;
+        float? vramFree  = null;
         
-        // Log all GPU sensors once to find the VRAM temperature name
+        // Log all GPU sensors once on first run
         if (!_loggedGpuSensors)
         {
             _logger.Info($"GPU Name: {hw.Name}");
             foreach (var s in hw.Sensors)
             {
-                if (s.SensorType == SensorType.Temperature)
-                    _logger.Info($"GPU Temp Sensor found: {s.Name}");
+                _logger.Info($"GPU Sensor found: Type={s.SensorType}, Name='{s.Name}', Value={s.Value}");
             }
             _loggedGpuSensors = true;
         }
@@ -252,7 +252,8 @@ public sealed class HardwareMonitorService : IDisposable
                     {
                         data.HotSpotTemp = Math.Round(v, 1);
                     }
-                    else if (sensor.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase))
+                    else if (sensor.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase) ||
+                             sensor.Name.Contains("VRAM", StringComparison.OrdinalIgnoreCase))
                     {
                         data.MemTemp = Math.Round(v, 1);
                     }
@@ -281,10 +282,21 @@ public sealed class HardwareMonitorService : IDisposable
                     break;
 
                 case SensorType.SmallData:
-                    if (sensor.Name.Contains("GPU Memory Used", StringComparison.OrdinalIgnoreCase))
+                case SensorType.Data:
+                    if (sensor.Name.Contains("Memory Used", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Contains("Dedicated Memory Used", StringComparison.OrdinalIgnoreCase))
+                    {
                         vramUsed = v;
-                    else if (sensor.Name.Contains("GPU Memory Total", StringComparison.OrdinalIgnoreCase))
+                    }
+                    else if (sensor.Name.Contains("Memory Free", StringComparison.OrdinalIgnoreCase))
+                    {
+                        vramFree = v;
+                    }
+                    else if (sensor.Name.Contains("Memory Total", StringComparison.OrdinalIgnoreCase) ||
+                             sensor.Name.Contains("Dedicated Memory Total", StringComparison.OrdinalIgnoreCase))
+                    {
                         vramTotal = v;
+                    }
                     break;
 
                 case SensorType.Power:
@@ -296,10 +308,31 @@ public sealed class HardwareMonitorService : IDisposable
             }
         }
 
+        // If total VRAM sensor is not directly provided by driver, calculate from Used + Free
+        if (!vramTotal.HasValue && vramUsed.HasValue && vramFree.HasValue)
+        {
+            vramTotal = vramUsed.Value + vramFree.Value;
+        }
+
         if (vramUsed.HasValue)
-            data.VramUsedGb  = Math.Round(vramUsed.Value  / 1024.0, 2);
+        {
+            double val = vramUsed.Value;
+            if (val > 1_000_000) val /= (1024.0 * 1024.0 * 1024.0); // bytes -> GB
+            else if (val > 100) val /= 1024.0; // MB -> GB
+            data.VramUsedGb = Math.Round(val, 2);
+        }
+
         if (vramTotal.HasValue)
-            data.VramTotalGb = Math.Round(vramTotal.Value / 1024.0, 2);
+        {
+            double val = vramTotal.Value;
+            if (val > 1_000_000) val /= (1024.0 * 1024.0 * 1024.0); // bytes -> GB
+            else if (val > 100) val /= 1024.0; // MB -> GB
+            data.VramTotalGb = Math.Round(val, 1);
+        }
+
+        // Fallback for GPU Temp if Core sensor wasn't matched
+        if (!data.Temp.HasValue && data.HotSpotTemp.HasValue)
+            data.Temp = data.HotSpotTemp;
     }
 
     // ─── RAM (Win32 GlobalMemoryStatusEx — accurate physical RAM) ────────────

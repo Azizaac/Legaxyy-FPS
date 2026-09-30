@@ -12,6 +12,23 @@ public sealed class HttpServerService : IDisposable
     private CancellationTokenSource _cts = new();
     private Task? _serverTask;
 
+    private double _plnRate = 1352.0;
+    private int _plnHours = 8;
+    private int _plnDays = 30;
+    private string _plnTier = "900_nonsubsidi";
+    private string _plnLabel = "900 VA";
+
+    public event Action<double, int, int, string, string>? PlnConfigChanged;
+
+    public void SetInitialPlnConfig(double rate, int hours, int days, string tier, string label)
+    {
+        if (rate > 0) _plnRate = rate;
+        if (hours > 0) _plnHours = hours;
+        if (days > 0) _plnDays = days;
+        if (!string.IsNullOrEmpty(tier)) _plnTier = tier;
+        if (!string.IsNullOrEmpty(label)) _plnLabel = label;
+    }
+
     public HttpServerService(int port, int wsPort, AppLogger logger)
     {
         _port = port;
@@ -78,12 +95,55 @@ public sealed class HttpServerService : IDisposable
     {
         try
         {
+            string path = context.Request.Url?.AbsolutePath ?? "/";
+            if (context.Request.HttpMethod == "POST" && path == "/api/pln")
+            {
+                using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                string json = reader.ReadToEnd();
+                try
+                {
+                    var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
+                    double rate = obj.Value<double?>("rate") ?? 1352.0;
+                    int hours = obj.Value<int?>("hours") ?? 8;
+                    int days = obj.Value<int?>("days") ?? 30;
+                    string tier = obj.Value<string>("tier") ?? "custom";
+                    string label = obj.Value<string>("label") ?? "Custom";
+
+                    _plnRate = rate;
+                    _plnHours = hours;
+                    _plnDays = days;
+                    _plnTier = tier;
+                    _plnLabel = label;
+
+                    PlnConfigChanged?.Invoke(rate, hours, days, tier, label);
+
+                    byte[] resp = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                    context.Response.ContentType = "application/json";
+                    context.Response.StatusCode = 200;
+                    context.Response.ContentLength64 = resp.Length;
+                    using var os = context.Response.OutputStream;
+                    os.Write(resp, 0, resp.Length);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"HttpServerService: /api/pln parse error: {ex.Message}");
+                    context.Response.StatusCode = 400;
+                    return;
+                }
+            }
+
             string customHtmlPath = Path.Combine(AppContext.BaseDirectory, "index.html");
             string html = File.Exists(customHtmlPath)
                 ? File.ReadAllText(customHtmlPath, Encoding.UTF8)
                 : GetHtmlContent();
             html = html.Replace("{{{_wsPort}}}", _wsPort.ToString())
-                       .Replace("{{_wsPort}}", _wsPort.ToString());
+                       .Replace("{{_wsPort}}", _wsPort.ToString())
+                       .Replace("{{{_plnRate}}}", _plnRate.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                       .Replace("{{{_plnHours}}}", _plnHours.ToString())
+                       .Replace("{{{_plnDays}}}", _plnDays.ToString())
+                       .Replace("{{{_plnTier}}}", _plnTier)
+                       .Replace("{{{_plnLabel}}}", _plnLabel);
             byte[] buffer = Encoding.UTF8.GetBytes(html);
             context.Response.ContentLength64 = buffer.Length;
             context.Response.ContentType = "text/html; charset=utf-8";
@@ -159,11 +219,11 @@ public sealed class HttpServerService : IDisposable
 
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-    html{width:100%;height:100%;background:var(--bg);overflow:hidden}
+    html{width:100%;height:100%;background:transparent;overflow:hidden}
 
     body{
       width:1920px;height:1080px;
-      background:var(--bg);
+      background:transparent;
       font-family:'Inter',system-ui,sans-serif;
       -webkit-font-smoothing:antialiased;
       user-select:none;overflow:hidden;
@@ -171,12 +231,7 @@ public sealed class HttpServerService : IDisposable
     }
 
     body::before{
-      content:'';position:fixed;inset:0;pointer-events:none;
-      background:
-        radial-gradient(ellipse 1100px 700px at 18% 8%,  rgba(56,189,248,0.045)  0%,transparent 65%),
-        radial-gradient(ellipse 900px  600px at 82% 6%,  rgba(192,132,252,0.045) 0%,transparent 65%),
-        radial-gradient(ellipse 800px  500px at 82% 92%, rgba(244,114,182,0.035) 0%,transparent 65%),
-        radial-gradient(ellipse 700px  450px at 18% 92%, rgba(52,211,153,0.03)   0%,transparent 65%);
+      display:none;
     }
 
     /* ── Layout ── */
@@ -603,6 +658,8 @@ public sealed class HttpServerService : IDisposable
 <div class="beacon" id="conn">
   <div class="beacon-dot"></div>
   <span class="beacon-lbl" id="conn-lbl">Connecting…</span>
+  <span style="opacity:0.35;margin:0 5px;font-size:12px;color:var(--t2)">|</span>
+  <span style="font-size:12px;font-weight:700;color:var(--t2);letter-spacing:0.04em">F11: Sembunyikan • F10: Tembus Klik</span>
 </div>
 
 <div class="stage">
@@ -1003,9 +1060,27 @@ function connect() {
 }
 
 // PLN settings
-const DFLT={tier:'900_nonsubsidi',rate:1352.0,hours:8,days:30,label:'900 VA'};
+const DFLT={tier:'{{{_plnTier}}}',rate:{{{_plnRate}}},hours:{{{_plnHours}}},days:{{{_plnDays}}},label:'{{{_plnLabel}}}'};
 let pln={...DFLT};
 try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s)pln={...DFLT,...JSON.parse(s)};}catch{}
+
+function syncPlnToBackend(){
+  try{
+    fetch('/api/pln', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rate: pln.rate,
+        hours: pln.hours,
+        days: pln.days,
+        tier: pln.tier,
+        label: pln.label
+      })
+    }).catch(()=>{});
+  }catch(e){}
+}
+// Sync on startup so in-game RTSS OSD matches dashboard immediately
+syncPlnToBackend();
 
 function renderCostLabel(){
   $('pwr-cost-sub').textContent=`Est. Biaya PLN (${pln.label} · ${pln.hours}h/hari) / bln`;
@@ -1057,6 +1132,7 @@ $('btn-save-pln').addEventListener('click',()=>{
   pln.hours=Math.max(1,Math.min(24,parseInt(hIn.value)||8));
   pln.days =Math.max(1,Math.min(31,parseInt(dIn.value)||30));
   try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
+  syncPlnToBackend();
   renderCostLabel(); closeModal();
   const pw=parseFloat($('pwr-val').textContent);
   if(!isNaN(pw))renderCost(pw);
@@ -1065,6 +1141,7 @@ $('btn-save-pln').addEventListener('click',()=>{
 $('btn-reset-pln').addEventListener('click',()=>{
   pln={...DFLT};
   try{localStorage.removeItem('legaxyy_pln_cfg');}catch{}
+  syncPlnToBackend();
   tierSel.value=pln.tier; cgrp.style.display='none';
   hIn.value=pln.hours; dIn.value=pln.days;
   updateFormula(); renderCostLabel();

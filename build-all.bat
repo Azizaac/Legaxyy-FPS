@@ -7,7 +7,9 @@ echo =======================================================
 set "DOTNET_CMD=%LocalAppData%\Microsoft\dotnet\dotnet.exe"
 if not exist "%DOTNET_CMD%" set "DOTNET_CMD=dotnet"
 
-set "ISCC_CMD=C:\Users\Aziz\AppData\Local\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe"
+set "ISCC_CMD=C:\Users\Legaxyy\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC_CMD%" set "ISCC_CMD=C:\Users\Legaxyy\AppData\Local\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe"
+if not exist "%ISCC_CMD%" set "ISCC_CMD=iscc"
 
 echo 1. Publishing LegaxyyFPS (Release win-x64)...
 "%DOTNET_CMD%" publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\dist\App
