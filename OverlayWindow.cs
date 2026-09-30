@@ -33,36 +33,48 @@ namespace OverlayDataBridge
 
         private async void InitializeAsync()
         {
-            // Ultra-lightweight Chromium options optimized for gaming overlays:
-            // - Disables background throttling so HUD stays fluid even during intense gaming
-            // - Disables heavy background services (telemetry, translate, speech, sync, media router)
-            // - Retains full GPU DirectComposition acceleration for 0-lag rendering
-            var chromiumArgs = "--disable-background-timer-throttling " +
-                               "--disable-backgrounding-occluded-windows " +
-                               "--disable-renderer-backgrounding " +
-                               "--disable-features=Translate,MediaRouter,OptimizationHints,DialMediaRouteProvider " +
-                               "--disable-component-update " +
-                               "--disable-background-networking " +
-                               "--disable-domain-reliability " +
-                               "--disable-sync " +
-                               "--disable-speech-api " +
-                               "--no-pings";
+            try
+            {
+                // Ultra-lightweight Chromium options optimized for gaming overlays:
+                // - Disables background throttling so HUD stays fluid even during intense gaming
+                // - Disables heavy background services (telemetry, translate, speech, sync, media router)
+                // - Retains full GPU DirectComposition acceleration for 0-lag rendering
+                var chromiumArgs = "--disable-background-timer-throttling " +
+                                   "--disable-backgrounding-occluded-windows " +
+                                   "--disable-renderer-backgrounding " +
+                                   "--disable-features=Translate,MediaRouter,OptimizationHints,DialMediaRouteProvider " +
+                                   "--disable-component-update " +
+                                   "--disable-background-networking " +
+                                   "--disable-domain-reliability " +
+                                   "--disable-sync " +
+                                   "--disable-speech-api " +
+                                   "--no-pings";
 
-            var options = new CoreWebView2EnvironmentOptions(chromiumArgs);
-            string userDataFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegaxyyFPS", "WebView2");
-            var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
-            
-            await _webView.EnsureCoreWebView2Async(environment);
-            
-            // Disable unneeded browser UI & context listeners to save RAM
-            var settings = _webView.CoreWebView2.Settings;
-            settings.IsStatusBarEnabled = false;
-            settings.AreDefaultContextMenusEnabled = false;
-            settings.AreDevToolsEnabled = false;
-            settings.IsBuiltInErrorPageEnabled = false;
-            settings.AreBrowserAcceleratorKeysEnabled = false;
+                var options = new CoreWebView2EnvironmentOptions(chromiumArgs);
+                string userDataFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegaxyyFPS", "WebView2");
+                var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+                
+                await _webView.EnsureCoreWebView2Async(environment);
+                
+                // Disable unneeded browser UI & context listeners to save RAM
+                var settings = _webView.CoreWebView2.Settings;
+                settings.IsStatusBarEnabled = false;
+                settings.AreDefaultContextMenusEnabled = false;
+                settings.AreDevToolsEnabled = false;
+                settings.IsBuiltInErrorPageEnabled = false;
+                settings.AreBrowserAcceleratorKeysEnabled = false;
 
-            _webView.CoreWebView2.Navigate(_url);
+                _webView.CoreWebView2.Navigate(_url);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Microsoft Edge WebView2 Runtime belum terpasang di Windows Anda.\n\n" +
+                    "Silakan pasang WebView2 Runtime agar layar overlay dapat tampil.\n\nDetail: " + ex.Message,
+                    "LegaxyyFPS — Komponen Diperlukan",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
     }
 }

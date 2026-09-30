@@ -333,11 +333,14 @@ public sealed class HardwareMonitorService : IDisposable
     private static DeviceInfo Clone(DeviceInfo d) => new() { CpuName = d.CpuName, GpuName = d.GpuName, RamLabel = d.RamLabel };
 
     // ─── IDisposable ─────────────────────────────────────────────────────────
+    private bool _disposed = false;
     public void Dispose()
     {
-        _cts.Cancel();
-        try { _loopTask?.Wait(3000); } catch { }
-        _cts.Dispose();
+        if (_disposed) return;
+        _disposed = true;
+        try { _cts.Cancel(); } catch { }
+        try { _loopTask?.Wait(2000); } catch { }
+        try { _cts.Dispose(); } catch { }
         try { _computer.Close(); _logger.Info("HardwareMonitorService: Computer closed."); }
         catch (Exception ex) { _logger.Error($"HardwareMonitorService: Error closing Computer. {ex.Message}"); }
     }
