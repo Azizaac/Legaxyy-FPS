@@ -29,4 +29,4 @@ Name: "{autodesktop}\LegaxyyFPS"; Filename: "{app}\LegaxyyFPS.exe"
 [Run]
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""OverlayDataBridgeStartup"" /F"; Flags: runhidden
 Filename: "{tmp}\MSIAfterburnerSetup467Beta2.exe"; Description: "Install MSI Afterburner & RTSS (Wajib untuk deteksi FPS)"; Flags: postinstall skipifsilent shellexec
-Filename: "{app}\LegaxyyFPS.exe"; Description: "Jalankan LegaxyyFPS sekarang"; Flags: nowait postinstall skipifsilent shellexec
+Filename: "{app}\LegaxyyFPS.exe"; Description: "Jalankan LegaxyyFPS sekarang"; Flags: nowait postinstall shellexec

@@ -16,6 +16,7 @@ public sealed class TrayApp : IDisposable
     private readonly PowerAggregatorService _powerService;
     private readonly WsBroadcastServer _wsServer;
     private readonly HttpServerService _httpServer;
+    private readonly UpdateService _updateService;
 
     // ─── tray UI ─────────────────────────────────────────────────────────────
     private readonly NotifyIcon _trayIcon;
@@ -43,17 +44,19 @@ public sealed class TrayApp : IDisposable
         int broadcastInterval = Cfg(config, "BroadcastIntervalMs",    500);
 
         // Build services
-        _logger       = new AppLogger();
-        _hwService    = new HardwareMonitorService(hwInterval, _logger);
-        _rtssService  = new RtssReaderService(fpsInterval, _logger);
-        _powerService = new PowerAggregatorService(_hwService, _logger);
-        _wsServer     = new WsBroadcastServer(wsPort, broadcastInterval, _hwService, _rtssService, _powerService, _logger);
-        _httpServer   = new HttpServerService(httpPort, wsPort, _logger);
+        _logger        = new AppLogger();
+        _hwService     = new HardwareMonitorService(hwInterval, _logger);
+        _rtssService   = new RtssReaderService(fpsInterval, _logger);
+        _powerService  = new PowerAggregatorService(_hwService, _logger);
+        _wsServer      = new WsBroadcastServer(wsPort, broadcastInterval, _hwService, _rtssService, _powerService, _logger);
+        _httpServer    = new HttpServerService(httpPort, wsPort, _logger);
+        _updateService = new UpdateService(config, _logger);
 
         // Build context menu
         _statusItem = new ToolStripMenuItem("Status: Starting…") { Enabled = false };
         _startupItem = new ToolStripMenuItem("Run on Startup", null, OnStartupToggleClicked) { Checked = IsStartupTaskEnabled() };
         var showOverlayItem = new ToolStripMenuItem("Buka Layar Overlay (Native)", null, OnShowOverlayClicked);
+        var checkUpdateItem = new ToolStripMenuItem("Periksa Pembaruan...", null, OnCheckUpdateClicked);
         var restartItem = new ToolStripMenuItem("Restart WebSocket Server", null, OnRestartClicked);
         var exitItem    = new ToolStripMenuItem("Exit", null, OnExitClicked);
 
@@ -62,6 +65,7 @@ public sealed class TrayApp : IDisposable
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(showOverlayItem);
         contextMenu.Items.Add(_startupItem);
+        contextMenu.Items.Add(checkUpdateItem);
         contextMenu.Items.Add(restartItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(exitItem);
@@ -92,9 +96,21 @@ public sealed class TrayApp : IDisposable
 
         // Automatically open the Overlay Window when application starts
         OnShowOverlayClicked(null, EventArgs.Empty);
+
+        // Check for updates silently in the background after startup
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            await _updateService.CheckForUpdatesAsync(isManualCheck: false);
+        });
     }
 
     // ─── tray callbacks ──────────────────────────────────────────────────────
+    private async void OnCheckUpdateClicked(object? sender, EventArgs e)
+    {
+        await _updateService.CheckForUpdatesAsync(isManualCheck: true);
+    }
+
     private void OnStartupToggleClicked(object? sender, EventArgs e)
     {
         bool enable = !_startupItem.Checked;

@@ -859,26 +859,41 @@ public sealed class HttpServerService : IDisposable
 const $ = id => document.getElementById(id);
 const CIRC = 2 * Math.PI * 68; // r=68 → 427.26
 
+function st(el, txt) {
+  if (el && el.textContent !== txt) el.textContent = txt;
+}
+
 function sv(el, val, unit='', d=0) {
-  if (val == null) { el.innerHTML='—'; el.classList.add('nil'); }
-  else { el.innerHTML=Number(val).toFixed(d)+(unit?`<span class="u">${unit}</span>`:''); el.classList.remove('nil'); }
+  if (!el) return;
+  const h = val == null ? '—' : Number(val).toFixed(d)+(unit?`<span class="u">${unit}</span>`:'');
+  if (el.innerHTML !== h) {
+    el.innerHTML = h;
+    if (val == null) el.classList.add('nil');
+    else el.classList.remove('nil');
+  }
 }
 
 function setBar(id, pct, base) {
-  const el=$(id), w=Math.min(100,Math.max(0,pct||0));
-  el.style.width=w+'%';
+  const el=$(id); if (!el) return;
+  const w=Math.min(100,Math.max(0,pct||0));
+  const newW = w+'%';
+  if (el.style.width !== newW) el.style.width = newW;
   const c=pct>=90?'var(--hot)':pct>=80?'var(--warn)':base;
-  el.style.background=c; el.style.color=c;
+  if (el.style.color !== c) { el.style.background=c; el.style.color=c; }
 }
 
 function setGauge(arcId, pctId, pct, base) {
-  const arc=$(arcId);
-  arc.style.strokeDashoffset = CIRC*(1-Math.min(100,Math.max(0,pct||0))/100);
+  const arc=$(arcId); if (!arc) return;
+  const offset = (CIRC*(1-Math.min(100,Math.max(0,pct||0))/100))+'px';
+  if (arc.style.strokeDashoffset !== offset) arc.style.strokeDashoffset = offset;
   const c=pct>=90?'var(--hot)':pct>=80?'var(--warn)':base;
-  arc.style.stroke=c;
+  if (arc.style.stroke !== c) arc.style.stroke=c;
   const pe=$(pctId);
-  pe.textContent=pct!=null?Math.round(pct):'—';
-  pe.style.color=c;
+  if (pe) {
+    const txt = pct!=null?Math.round(pct).toString():'—';
+    if (pe.textContent !== txt) pe.textContent = txt;
+    if (pe.style.color !== c) pe.style.color = c;
+  }
 }
 
 function tempColor(t) { return t>=85?'var(--hot)':t>=75?'var(--warn)':null; }
@@ -897,20 +912,21 @@ function connect() {
   const host=location.hostname||'localhost';
   const url=isS?proto+'ws.'+location.hostname:proto+host+':{{{_wsPort}}}';
 
-  const ws=new WebSocket(url);
-  ws.onopen  =()=>{ bcon.className='beacon live'; lbl.textContent='Connected'; };
-  ws.onclose =()=>{ bcon.className='beacon'; lbl.textContent='Reconnecting…'; setTimeout(connect,2000); };
-  ws.onerror =()=>{ bcon.className='beacon'; lbl.textContent='Error'; };
+  let pendingData = null;
+  let rafPending = false;
 
-  ws.onmessage=({data})=>{
-    let d; try{d=JSON.parse(data);}catch{return}
-
-    $('cpu-name').textContent=shortName(d.device?.cpuName)||'—';
-    $('gpu-name').textContent=shortName(d.device?.gpuName)||'—';
+  function applyData(d) {
+    st($('cpu-name'), shortName(d.device?.cpuName)||'—');
+    st($('gpu-name'), shortName(d.device?.gpuName)||'—');
 
     // CPU
     const ct=d.cpu?.temp;
-    if(ct!=null){$('cpu-temp').textContent=Number(ct).toFixed(1);$('cpu-temp-wrap').style.color=tempColor(ct)||'var(--cpu)';}
+    if(ct!=null){
+      st($('cpu-temp'), Number(ct).toFixed(1));
+      const col = tempColor(ct)||'var(--cpu)';
+      const elWrap = $('cpu-temp-wrap');
+      if (elWrap && elWrap.style.color !== col) elWrap.style.color = col;
+    }
     sv($('cpu-load'),  d.cpu?.load,  '%',   1);
     sv($('cpu-clock'), d.cpu?.clock, 'MHz', 0);
     sv($('cpu-power'), d.cpu?.power, 'W',   1);
@@ -918,7 +934,12 @@ function connect() {
 
     // GPU
     const gt=d.gpu?.temp;
-    if(gt!=null){$('gpu-temp').textContent=Number(gt).toFixed(1);$('gpu-temp-wrap').style.color=tempColor(gt)||'var(--gpu)';}
+    if(gt!=null){
+      st($('gpu-temp'), Number(gt).toFixed(1));
+      const col = tempColor(gt)||'var(--gpu)';
+      const elWrap = $('gpu-temp-wrap');
+      if (elWrap && elWrap.style.color !== col) elWrap.style.color = col;
+    }
     sv($('gpu-load'),    d.gpu?.load,        '%',   1);
     sv($('gpu-hotspot'), d.gpu?.hotSpotTemp, '°C',  1);
     sv($('gpu-clock'),   d.gpu?.coreClock,   'MHz', 0);
@@ -931,14 +952,18 @@ function connect() {
     sv($('ram-used'),  d.mem?.usedGb,  'GB',2);
     sv($('ram-total'), d.mem?.totalGb, 'GB',1);
     const rc=$('ram-clock');
-    if(d.mem?.clock!=null){rc.textContent=d.mem.clock+' MHz';rc.style.display='';}
-    else rc.style.display='none';
+    if(d.mem?.clock!=null){
+      st(rc, d.mem.clock+' MHz');
+      if (rc.style.display!=='') rc.style.display='';
+    } else if (rc && rc.style.display!=='none') rc.style.display='none';
 
     // VRAM
     const vt=d.gpu?.hotSpotTemp??d.gpu?.temp;
     const vtw=$('vram-temp-wrap');
-    if(vt!=null){$('vram-temp').textContent=Number(vt).toFixed(1);vtw.style.display='';}
-    else vtw.style.display='none';
+    if(vt!=null){
+      st($('vram-temp'), Number(vt).toFixed(1));
+      if (vtw && vtw.style.display!=='') vtw.style.display='';
+    } else if (vtw && vtw.style.display!=='none') vtw.style.display='none';
     setGauge('g-vram','vram-pct',d.gpu?.vramPct,'var(--vram)');
     sv($('vram-used'),  d.gpu?.vramUsedGb,  'GB',2);
     sv($('vram-total'), d.gpu?.vramTotalGb, 'GB',1);
@@ -946,16 +971,34 @@ function connect() {
 
     // FPS
     const fc=d.fps?.current,ft=d.fps?.frametimeMs,f1=d.fps?.low1pct,f0=d.fps?.low01pct;
-    $('fps-cur').textContent=fc!=null?Math.round(fc):'—';
-    $('fps-ft').textContent =ft!=null?Number(ft).toFixed(2):'—';
+    st($('fps-cur'), fc!=null?Math.round(fc).toString():'—');
+    st($('fps-ft'), ft!=null?Number(ft).toFixed(2):'—');
     const e1=$('fps-1p'),e01=$('fps-01p');
-    if(f1!=null){e1.textContent=Math.round(f1);  e1.classList.remove('nil');}else{e1.textContent='—';  e1.classList.add('nil');}
-    if(f0!=null){e01.textContent=Math.round(f0); e01.classList.remove('nil');}else{e01.textContent='—';e01.classList.add('nil');}
+    if(f1!=null){ st(e1, Math.round(f1).toString()); e1.classList.remove('nil'); }
+    else if (e1) { st(e1, '—'); e1.classList.add('nil'); }
+    if(f0!=null){ st(e01, Math.round(f0).toString()); e01.classList.remove('nil'); }
+    else if (e01) { st(e01, '—'); e01.classList.add('nil'); }
 
     // Power
     const pw=d.power?.totalW;
-    $('pwr-val').textContent=pw!=null?Number(pw).toFixed(1):'—';
+    st($('pwr-val'), pw!=null?Number(pw).toFixed(1):'—');
     renderCost(pw);
+  }
+
+  const ws=new WebSocket(url);
+  ws.onopen  =()=>{ bcon.className='beacon live'; lbl.textContent='Connected'; };
+  ws.onclose =()=>{ bcon.className='beacon'; lbl.textContent='Reconnecting…'; setTimeout(connect,2000); };
+  ws.onerror =()=>{ bcon.className='beacon'; lbl.textContent='Error'; };
+
+  ws.onmessage=({data})=>{
+    try{ pendingData=JSON.parse(data); }catch{ return; }
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        if (pendingData) applyData(pendingData);
+      });
+    }
   };
 }
 

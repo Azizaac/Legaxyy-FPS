@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LegaxyyFPS — Realtime Gaming & Hardware Overlay</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: rgba(24, 24, 27, 0.7);
+      --border: rgba(63, 63, 70, 0.5);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.4);
+      --accent-hover: #2563eb;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --green: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Ambient background lights */
+    .glow-sphere {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      filter: blur(80px);
+      z-index: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(12px);
+      background: rgba(9, 9, 11, 0.8);
+      border-bottom: 1px solid var(--border);
+      z-index: 50;
+    }
+
+    .nav-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      margin-left: 1.5rem;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: #fff;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem 6rem;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 5rem;
+    }
+
+    .version-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+
+    .version-tag span.dot {
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 900;
+      line-height: 1.15;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 2.2rem; }
+    }
+
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 650px;
+      margin: 0 auto 2.5rem;
+    }
+
+    .cta-container {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color: white;
+      text-decoration: none;
+      padding: 0.9rem 2rem;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      box-shadow: 0 10px 25px -5px var(--accent-glow);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 30px -5px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(39, 39, 42, 0.8);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      padding: 0.9rem 1.75rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1.05rem;
+      transition: background 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(63, 63, 70, 0.8);
+    }
+
+    .specs-note {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Mockup Display */
+    .preview-card {
+      margin: 3.5rem auto 0;
+      max-width: 750px;
+      background: #121215;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+      text-align: left;
+    }
+
+    .preview-header {
+      background: #18181b;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      gap: 0.5rem;
+    }
+
+    .dot-btn {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #eab308; }
+    .dot-green { background: #22c55e; }
+
+    .preview-title {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+      font-family: monospace;
+    }
+
+    .overlay-hud {
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      font-family: monospace;
+    }
+
+    .hud-stat {
+      background: rgba(24, 24, 27, 0.9);
+      border: 1px solid rgba(63, 63, 70, 0.4);
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    .hud-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .hud-val {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #60a5fa;
+    }
+
+    .hud-sub {
+      font-size: 0.75rem;
+      color: #34d399;
+      margin-top: 0.2rem;
+    }
+
+    /* Features Grid */
+    .features-section {
+      margin-top: 6rem;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-header h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.75rem;
+      backdrop-filter: blur(8px);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .feature-card p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    /* Changelog Section */
+    .changelog-section {
+      margin-top: 6rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2.5rem;
+    }
+
+    .changelog-box {
+      margin-top: 1.5rem;
+      background: #141417;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #e4e4e7;
+      white-space: pre-wrap;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glow-sphere"></div>
+
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo">
+        LegaxyyFPS
+        <span class="logo-badge">v1.1</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Fitur</a>
+        <a href="#changelog">Changelog</a>
+        <a href="#download">Download</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="hero" id="download">
+      <div class="version-tag">
+        <span class="dot"></span>
+        Versi 1.1.0 Sekarang Tersedia
+      </div>
+      <h1>Monitor Performa Gaming Kamu<br>Secara Realtime & Ringan</h1>
+      <p class="hero-desc">
+        Overlay native untuk Windows yang menampilkan realtime FPS, suhu & daya CPU/GPU, penggunaan RAM, hingga kalkulator biaya listrik PLN saat kamu bermain game.
+      </p>
+
+      <div class="cta-container">
+        <a href="downloads/LegaxyyFPS_Setup_v1.1.exe" id="downloadBtn" class="btn-primary">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Download Installer (v1.1.0)
+        </a>
+        <a href="#features" class="btn-secondary">Jelajahi Fitur</a>
+      </div>
+      <p class="specs-note">Mendukung Windows 10 & 11 (64-Bit) • Ukuran installer ~60 MB (termasuk RTSS runtime)</p>
+
+      <!-- PREVIEW HUD -->
+      <div class="preview-card">
+        <div class="preview-header">
+          <span class="dot-btn dot-red"></span>
+          <span class="dot-btn dot-yellow"></span>
+          <span class="dot-btn dot-green"></span>
+          <span class="preview-title">LegaxyyFPS — Live Overlay Native Preview</span>
+        </div>
+        <div class="overlay-hud">
+          <div class="hud-stat">
+            <div class="hud-label">FPS Realtime</div>
+            <div class="hud-val">144.0</div>
+            <div class="hud-sub">Frametime: 6.9 ms</div>
+          </div>
+          <div class="hud-stat">
+            <div class="hud-label">CPU (Core i7)</div>
+            <div class="hud-val">62°C</div>
+            <div class="hud-sub">Usage: 38% • 45W</div>
+          </div>
+          <div class="hud-stat">
+            <div class="hud-label">GPU (RTX 4070)</div>
+            <div class="hud-val">68°C</div>
+            <div class="hud-sub">Usage: 96% • 185W</div>
+          </div>
+          <div class="hud-stat">
+            <div class="hud-label">Biaya PLN / Jam</div>
+            <div class="hud-val">Rp 345</div>
+            <div class="hud-sub">Total Daya: 255W</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features-section" id="features">
+      <div class="section-header">
+        <h2>Fitur Utama LegaxyyFPS</h2>
+        <p style="color: var(--text-muted);">Dirancang untuk gamer dan power-user yang menginginkan akurasi tanpa lag.</p>
+      </div>
+
+      <div class="grid-cards">
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>Realtime FPS & Frametime</h3>
+          <p>Terintegrasi langsung dengan RTSS (RivaTuner Statistics Server) untuk deteksi framerate akurat dan mulus di semua game DirectX, Vulkan, dan OpenGL.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Sensor Hardware Lengkap</h3>
+          <p>Membaca suhu CPU, GPU, penggunaan RAM, clock speed, dan wattase realtime menggunakan LibreHardwareMonitor tingkat kernel.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💡</div>
+          <h3>Kalkulator Biaya Listrik PLN</h3>
+          <p>Otomatis menghitung konsumsi watt dan mengonversinya ke estimasi rupiah per jam berdasarkan tarif listrik rumah tangga Indonesia.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>In-App Auto Update</h3>
+          <p>Tidak perlu unduh dan pasang manual lagi! Aplikasi memiliki tombol periksa pembaruan dan mengunduh rilis terbaru langsung dari server.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <h3>Native WebView2 Overlay</h3>
+          <p>Tampilan antarmuka futuristik, bisa diposisikan di layar utama maupun monitor kedua, dan bisa di-resize sesuai kebutuhan.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Ringan & Minim Resource</h3>
+          <p>Berjalan di background system tray tanpa membebani CPU, sehingga tidak memicu FPS drop saat bermain game kompetitif.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHANGELOG -->
+    <section class="changelog-section" id="changelog">
+      <h2>Catatan Rilis (Changelog)</h2>
+      <p style="color: var(--text-muted); margin-top: 0.25rem;">Rilis versi 1.1.0 terbaru</p>
+      <div class="changelog-box" id="changelogContent">
+[Versi 1.1.0]
+- FITUR BARU: Auto Update langsung di dalam aplikasi (tanpa download installer manual lagi).
+- Peningkatan kestabilan pembacaan FPS via RTSS shared memory bridge.
+- Optimalisasi konsumsi memori background service dan WebView2 engine.
+- Penyesuaian skema kalkulasi tarif listrik PLN 900VA & 1300VA.
+- Perbaikan bug saat minimize overlay window.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 LegaxyyFPS. Dibuat untuk komunitas gamer & hardware enthusiast.</p>
+  </footer>
+
+  <script>
+    // Dinamis membaca version.json jika tersedia di server
+    fetch('version.json?t=' + Date.now())
+      .then(res => res.json())
+      .then(data => {
+        if (data.version) {
+          document.querySelectorAll('.logo-badge').forEach(el => el.textContent = 'v' + data.version);
+          var btn = document.getElementById('downloadBtn');
+          if (btn && data.downloadUrl) {
+            btn.href = data.downloadUrl;
+            btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download Installer (v` + data.version + `)`;
+          }
+        }
+        if (data.changelog) {
+          var box = document.getElementById('changelogContent');
+          if (box) box.textContent = `[Versi ` + data.version + `]\n` + data.changelog;
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

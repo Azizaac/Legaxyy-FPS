@@ -55,8 +55,11 @@ public sealed class HardwareMonitorService : IDisposable
             IsCpuEnabled         = true,
             IsGpuEnabled         = true,
             IsMemoryEnabled      = true,
-            IsMotherboardEnabled = true,
-            IsPsuEnabled         = true
+            IsMotherboardEnabled = false,
+            IsControllerEnabled  = false,
+            IsNetworkEnabled     = false,
+            IsStorageEnabled     = false,
+            IsPsuEnabled         = false
         };
 
         try

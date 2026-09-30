@@ -1,0 +1,6 @@
+{
+  "version": "1.1.0",
+  "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.1.exe",
+  "changelog": "- Fitur Auto Update langsung di dalam aplikasi tanpa perlu download manual lagi\n- Peningkatan kestabilan pembacaan sensor RTSS & LibreHardwareMonitor\n- Estimasi biaya listrik PLN terintegrasi secara realtime\n- Optimasi konsumsi memori WebView2",
+  "mandatory": false
+}

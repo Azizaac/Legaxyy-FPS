@@ -23,7 +23,8 @@ namespace OverlayDataBridge
 
             _webView = new WebView2
             {
-                Dock = DockStyle.Fill
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = Color.Black
             };
             this.Controls.Add(_webView);
 
@@ -32,15 +33,35 @@ namespace OverlayDataBridge
 
         private async void InitializeAsync()
         {
-            // Disable background throttling in Chromium to prevent freezing when minimized or occluded
-            var options = new CoreWebView2EnvironmentOptions(
-                "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding"
-            );
+            // Ultra-lightweight Chromium options optimized for gaming overlays:
+            // - Disables background throttling so HUD stays fluid even during intense gaming
+            // - Disables heavy background services (telemetry, translate, speech, sync, media router)
+            // - Retains full GPU DirectComposition acceleration for 0-lag rendering
+            var chromiumArgs = "--disable-background-timer-throttling " +
+                               "--disable-backgrounding-occluded-windows " +
+                               "--disable-renderer-backgrounding " +
+                               "--disable-features=Translate,MediaRouter,OptimizationHints,DialMediaRouteProvider " +
+                               "--disable-component-update " +
+                               "--disable-background-networking " +
+                               "--disable-domain-reliability " +
+                               "--disable-sync " +
+                               "--disable-speech-api " +
+                               "--no-pings";
+
+            var options = new CoreWebView2EnvironmentOptions(chromiumArgs);
             string userDataFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegaxyyFPS", "WebView2");
             var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
             
             await _webView.EnsureCoreWebView2Async(environment);
             
+            // Disable unneeded browser UI & context listeners to save RAM
+            var settings = _webView.CoreWebView2.Settings;
+            settings.IsStatusBarEnabled = false;
+            settings.AreDefaultContextMenusEnabled = false;
+            settings.AreDevToolsEnabled = false;
+            settings.IsBuiltInErrorPageEnabled = false;
+            settings.AreBrowserAcceleratorKeysEnabled = false;
+
             _webView.CoreWebView2.Navigate(_url);
         }
     }
