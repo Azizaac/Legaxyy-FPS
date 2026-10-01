@@ -96,47 +96,61 @@ public sealed class HttpServerService : IDisposable
         try
         {
             string path = context.Request.Url?.AbsolutePath ?? "/";
-            if (context.Request.HttpMethod == "POST" && path == "/api/pln")
+            if (path == "/api/pln")
             {
-                using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-                string json = reader.ReadToEnd();
-                try
+                if (context.Request.HttpMethod == "GET")
                 {
-                    var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
-                    double rate = obj.Value<double?>("rate") ?? 1352.0;
-                    int hours = obj.Value<int?>("hours") ?? 8;
-                    int days = obj.Value<int?>("days") ?? 30;
-                    string tier = obj.Value<string>("tier") ?? "custom";
-                    string label = obj.Value<string>("label") ?? "Custom";
-
-                    _plnRate = rate;
-                    _plnHours = hours;
-                    _plnDays = days;
-                    _plnTier = tier;
-                    _plnLabel = label;
-
-                    PlnConfigChanged?.Invoke(rate, hours, days, tier, label);
-
-                    byte[] resp = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                    string cfg = Newtonsoft.Json.JsonConvert.SerializeObject(new { rate = _plnRate, hours = _plnHours, days = _plnDays, tier = _plnTier, label = _plnLabel });
+                    byte[] gbuf = Encoding.UTF8.GetBytes(cfg);
                     context.Response.ContentType = "application/json";
                     context.Response.StatusCode = 200;
-                    context.Response.ContentLength64 = resp.Length;
-                    using var os = context.Response.OutputStream;
-                    os.Write(resp, 0, resp.Length);
+                    context.Response.ContentLength64 = gbuf.Length;
+                    using var gos = context.Response.OutputStream;
+                    gos.Write(gbuf, 0, gbuf.Length);
                     return;
                 }
-                catch (Exception ex)
+                if (context.Request.HttpMethod == "POST")
                 {
-                    _logger.Error($"HttpServerService: /api/pln parse error: {ex.Message}");
-                    context.Response.StatusCode = 400;
-                    return;
+                    using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                    string json = reader.ReadToEnd();
+                    try
+                    {
+                        var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
+                        double rate = obj.Value<double?>("rate") ?? 1352.0;
+                        int hours = obj.Value<int?>("hours") ?? 8;
+                        int days = obj.Value<int?>("days") ?? 30;
+                        string tier = obj.Value<string>("tier") ?? "custom";
+                        string label = obj.Value<string>("label") ?? "Custom";
+
+                        _plnRate = rate;
+                        _plnHours = hours;
+                        _plnDays = days;
+                        _plnTier = tier;
+                        _plnLabel = label;
+
+                        PlnConfigChanged?.Invoke(rate, hours, days, tier, label);
+
+                        byte[] resp = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                        context.Response.ContentType = "application/json";
+                        context.Response.StatusCode = 200;
+                        context.Response.ContentLength64 = resp.Length;
+                        using var os = context.Response.OutputStream;
+                        os.Write(resp, 0, resp.Length);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"HttpServerService: /api/pln parse error: {ex.Message}");
+                        context.Response.StatusCode = 400;
+                        return;
+                    }
                 }
             }
 
-            string customHtmlPath = Path.Combine(AppContext.BaseDirectory, "index.html");
-            string html = File.Exists(customHtmlPath)
-                ? File.ReadAllText(customHtmlPath, Encoding.UTF8)
-                : GetHtmlContent();
+            // Always serve the embedded dashboard so OSD + dashboard share one
+            // PLN source of truth. (Never serve a stale index.html from disk —
+            // that desynced OSD (900 VA default) from the dashboard before.)
+            string html = GetHtmlContent();
             html = html.Replace("{{{_wsPort}}}", _wsPort.ToString())
                        .Replace("{{_wsPort}}", _wsPort.ToString())
                        .Replace("{{{_plnRate}}}", _plnRate.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -164,6 +178,12 @@ public sealed class HttpServerService : IDisposable
 
     private string GetHtmlContent()
     {
+        // Serialize PLN defaults as JSON (Newtonsoft always uses '.' decimals)
+        // so the dashboard script can never break on Indonesian comma-decimal
+        // formatting, regardless of Windows locale.
+        string plnJson = Newtonsoft.Json.JsonConvert.SerializeObject(
+            new { rate = _plnRate, hours = _plnHours, days = _plnDays, tier = _plnTier, label = _plnLabel })
+            .Replace("'", "\\'");
         return $$$"""
 <!DOCTYPE html>
 <html lang="en">
@@ -1059,10 +1079,13 @@ function connect() {
   };
 }
 
-// PLN settings
-const DFLT={tier:'{{{_plnTier}}}',rate:{{{_plnRate}}},hours:{{{_plnHours}}},days:{{{_plnDays}}},label:'{{{_plnLabel}}}'};
+// PLN settings — backend (user_settings.json via /api/pln) is the single source
+// of truth shared with the in-game RTSS OSD. Server-injected DFLT carries the
+// backend values; localStorage is only a cache of the user's last choice.
+const DFLT=Object.assign({tier:'900_nonsubsidi',rate:1352,hours:8,days:30,label:'900 VA'},JSON.parse('{{{plnJson}}}'));
 let pln={...DFLT};
-try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s)pln={...DFLT,...JSON.parse(s)};}catch{}
+let _hasLocal=false;
+try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s){pln={...DFLT,...JSON.parse(s)};_hasLocal=true;}}catch{}
 
 function syncPlnToBackend(){
   try{
@@ -1079,8 +1102,29 @@ function syncPlnToBackend(){
     }).catch(()=>{});
   }catch(e){}
 }
-// Sync on startup so in-game RTSS OSD matches dashboard immediately
-syncPlnToBackend();
+// Sync on startup so in-game RTSS OSD matches dashboard immediately.
+// If the user has a saved local choice that the backend never received
+// (e.g. after the stale-file desync bug), push it up; otherwise adopt the
+// backend values so OSD == dashboard.
+(async function initPlnSync(){
+  try{
+    const r=await fetch('/api/pln',{cache:'no-store'});
+    if(r.ok){
+      const srv=await r.json();
+      if(srv && srv.rate>0){
+        if(_hasLocal && (srv.rate!==pln.rate||srv.hours!==pln.hours||srv.days!==pln.days||srv.tier!==pln.tier)){
+          syncPlnToBackend();
+        }else{
+          pln={rate:srv.rate,hours:srv.hours,days:srv.days,tier:srv.tier||pln.tier,label:srv.label||pln.label};
+          try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
+        }
+        renderCostLabel();
+        return;
+      }
+    }
+  }catch(e){}
+  syncPlnToBackend();
+})();
 
 function renderCostLabel(){
   $('pwr-cost-sub').textContent=`Est. Biaya PLN (${pln.label} · ${pln.hours}h/hari) / bln`;
