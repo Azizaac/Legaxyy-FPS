@@ -1,6 +1,27 @@
 {
   "version": "1.3.0",
+  "releaseDate": "2026-10-02",
   "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.3.0.exe",
   "changelog": "- FITUR BARU: Tracker listrik akumulatif real-time — biaya kWh harian & bulanan dihitung otomatis dari pemakaian daya sebenarnya (bukan lagi estimasi statis)\n- FITUR BARU: Semua pengaturan kini ada di Dashboard — buka via tombol ⚙ di pojok kanan atas (Mode, OSD RTSS, Startup, dll.)\n- Menu System Tray disederhanakan: hanya Status, Buka Dashboard, Toggle OSD, dan Keluar\n- POWER card kini menampilkan: Watt real-time, biaya bulan ini (Rp + kWh), dan biaya hari ini\n- Periode tagihan bisa diatur (tgl mulai 1–28)\n- Data pemakaian listrik disimpan otomatis setiap 60 detik ke file JSON lokal",
-  "mandatory": false
+  "mandatory": false,
+  "previousVersions": [
+    {
+      "version": "1.2.1",
+      "releaseDate": "2026-09-30",
+      "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.2.1.exe",
+      "changelog": "- PERBAIKAN KRITIS: Dashboard blank + \"Connecting...\" terus saat memakai tarif 1.300/3.500/6.600 VA (bug koma desimal yang merusak script dashboard)\n- Format angka dikirim sebagai JSON agar kebal terhadap format regional Windows Indonesia\n- Peningkatan sinkronisasi konfigurasi OSD RTSS"
+    },
+    {
+      "version": "1.2.0",
+      "releaseDate": "2026-09-28",
+      "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.2.exe",
+      "changelog": "- PERBAIKAN: Tarif PLN di OSD in-game selalu sync dengan dashboard (tidak nyangkut di 900 VA)\n- Dashboard jadi acuan tunggal pengaturan daya & tarif\n- Tambah REST endpoint /api/pln untuk membaca konfigurasi backend"
+    },
+    {
+      "version": "1.1.0",
+      "releaseDate": "2026-09-25",
+      "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.1.exe",
+      "changelog": "- FITUR BARU: Auto Update langsung di dalam aplikasi tanpa download manual lagi\n- Peningkatan kestabilan pembacaan FPS via RTSS shared memory bridge\n- Optimalisasi konsumsi memori background service dan WebView2 engine"
+    }
+  ]
 }
