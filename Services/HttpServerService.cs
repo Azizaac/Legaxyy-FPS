@@ -20,6 +20,39 @@ public sealed class HttpServerService : IDisposable
 
     public event Action<double, int, int, string, string>? PlnConfigChanged;
 
+// ─── Settings event delegates ────────────────────────────────────────────
+public event Action<string>? ModeChanged;              // "Gamer" or "Streamer"
+public event Action<bool>? RtssOsdToggled;             // true/false
+public event Action<string>? RtssStyleChanged;         // style name
+public event Action<bool>? StartupToggled;             // true/false  
+public event Action? RestartWsRequested;
+public event Action? CheckUpdateRequested;
+public event Action<int>? BillingCycleStartDayChanged; // 1-28
+
+// ─── State exposed to dashboard settings UI ──────────────────────────────
+private string _currentMode = "Streamer";
+private bool _rtssOsdEnabled = true;
+private string _rtssStyle = "FullAllInOne";
+private bool _startupEnabled = false;
+private int _billingCycleStartDay = 1;
+private int _wsClientCount = 0;
+
+public void SetSettingsState(string mode, bool rtssEnabled, string rtssStyle, bool startupEnabled, int billingCycleStartDay, int wsClientCount)
+{
+    _currentMode = mode;
+    _rtssOsdEnabled = rtssEnabled;
+    _rtssStyle = rtssStyle;
+    _startupEnabled = startupEnabled;
+    _billingCycleStartDay = billingCycleStartDay;
+    _wsClientCount = wsClientCount;
+}
+
+public void UpdateWsClientCount(int count) => _wsClientCount = count;
+public void UpdateStartupState(bool enabled) => _startupEnabled = enabled;
+public void UpdateRtssState(bool enabled, string style) { _rtssOsdEnabled = enabled; _rtssStyle = style; }
+public void UpdateMode(string mode) => _currentMode = mode;
+
+
     public void SetInitialPlnConfig(double rate, int hours, int days, string tier, string label)
     {
         if (rate > 0) _plnRate = rate;
@@ -147,6 +180,77 @@ public sealed class HttpServerService : IDisposable
                 }
             }
 
+            if (path == "/api/settings")
+            {
+                if (context.Request.HttpMethod == "GET")
+                {
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(new {
+                        mode = _currentMode,
+                        rtssOsdEnabled = _rtssOsdEnabled,
+                        rtssStyle = _rtssStyle,
+                        startupEnabled = _startupEnabled,
+                        billingCycleStartDay = _billingCycleStartDay,
+                        wsClientCount = _wsClientCount
+                    });
+                    byte[] buf = Encoding.UTF8.GetBytes(json);
+                    context.Response.ContentType = "application/json";
+                    context.Response.StatusCode = 200;
+                    context.Response.ContentLength64 = buf.Length;
+                    using var os = context.Response.OutputStream;
+                    os.Write(buf, 0, buf.Length);
+                    return;
+                }
+                if (context.Request.HttpMethod == "POST")
+                {
+                    using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                    string json = reader.ReadToEnd();
+                    try
+                    {
+                        var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
+                        string? action = obj.Value<string>("action");
+
+                        switch (action)
+                        {
+                            case "setMode":
+                                ModeChanged?.Invoke(obj.Value<string>("value") ?? "Streamer");
+                                break;
+                            case "toggleRtssOsd":
+                                RtssOsdToggled?.Invoke(obj.Value<bool?>("value") ?? true);
+                                break;
+                            case "setRtssStyle":
+                                RtssStyleChanged?.Invoke(obj.Value<string>("value") ?? "FullAllInOne");
+                                break;
+                            case "toggleStartup":
+                                StartupToggled?.Invoke(obj.Value<bool?>("value") ?? false);
+                                break;
+                            case "restartWs":
+                                RestartWsRequested?.Invoke();
+                                break;
+                            case "checkUpdate":
+                                CheckUpdateRequested?.Invoke();
+                                break;
+                            case "setBillingCycleDay":
+                                BillingCycleStartDayChanged?.Invoke(obj.Value<int?>("value") ?? 1);
+                                break;
+                        }
+
+                        byte[] resp = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                        context.Response.ContentType = "application/json";
+                        context.Response.StatusCode = 200;
+                        context.Response.ContentLength64 = resp.Length;
+                        using var os = context.Response.OutputStream;
+                        os.Write(resp, 0, resp.Length);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"HttpServerService: /api/settings parse error: {ex.Message}");
+                        context.Response.StatusCode = 400;
+                        return;
+                    }
+                }
+            }
+
             // Always serve the embedded dashboard so OSD + dashboard share one
             // PLN source of truth. (Never serve a stale index.html from disk —
             // that desynced OSD (900 VA default) from the dashboard before.)
@@ -182,7 +286,7 @@ public sealed class HttpServerService : IDisposable
         // so the dashboard script can never break on Indonesian comma-decimal
         // formatting, regardless of Windows locale.
         string plnJson = Newtonsoft.Json.JsonConvert.SerializeObject(
-            new { rate = _plnRate, hours = _plnHours, days = _plnDays, tier = _plnTier, label = _plnLabel })
+            new { rate = _plnRate, hours = _plnHours, days = _plnDays, tier = _plnTier, label = _plnLabel, billingDay = _billingCycleStartDay })
             .Replace("'", "\\'");
         return $$$"""
 <!DOCTYPE html>
@@ -492,43 +596,41 @@ public sealed class HttpServerService : IDisposable
 
     /* ── Power Card & Listrik PLN (Huge, Prominent) ── */
     .pwr-num{
-      font-family:var(--mono);font-size:104px;font-weight:900;
+      font-family:var(--mono);font-size:80px;font-weight:900;
       line-height:0.95;letter-spacing:-0.04em;color:var(--pwr);
       text-shadow:0 0 38px var(--pwr-glow);
       font-variant-numeric:tabular-nums;position:relative;z-index:1;
     }
-    .pwr-unit{font-size:32px;font-weight:800;color:var(--t2);margin-left:4px}
-    .cost-panel{
-      margin-top:auto;
+    .pwr-unit{font-size:28px;font-weight:800;color:var(--t2);margin-left:4px}
+
+    /* ── Accumulative Energy Panel ── */
+    .energy-panel{
+      margin-top:8px;
       background:linear-gradient(135deg,rgba(74,222,128,.15) 0%,rgba(34,197,94,.05) 100%);
       border:2px solid rgba(74,222,128,.35);border-radius:18px;
-      padding:16px 20px;display:flex;flex-direction:column;gap:6px;
-      cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;
+      padding:14px 18px;display:flex;flex-direction:column;gap:4px;
       position:relative;z-index:1;overflow:hidden;
     }
-    .cost-panel::before{
+    .energy-panel::before{
       content:'';position:absolute;top:0;left:0;right:0;height:1px;
       background:linear-gradient(90deg,transparent,rgba(74,222,128,.5) 50%,transparent);
     }
-    .cost-panel:hover{
-      border-color:rgba(74,222,128,.65);
-      box-shadow:0 0 28px rgba(74,222,128,.3);
-      transform:translateY(-1px);
-    }
-    .cost-amt{
-      font-family:var(--mono);font-size:50px;font-weight:900;
+    .energy-month-cost{
+      font-family:var(--mono);font-size:36px;font-weight:900;
       color:#4ade80;letter-spacing:-.03em;line-height:1;
-      text-shadow:0 0 24px rgba(74,222,128,.55);
+      text-shadow:0 0 20px rgba(74,222,128,.45);
       font-variant-numeric:tabular-nums;
     }
-    .cost-meta{display:flex;align-items:center;justify-content:space-between;margin-top:2px}
-    .cost-desc{font-size:18px;font-weight:800;color:#86efac;letter-spacing:.01em}
-    .cost-edit{
-      font-size:13px;font-weight:800;color:#86efac;
-      background:rgba(255,255,255,.08);padding:4px 10px;border-radius:6px;letter-spacing:.04em;
+    .energy-month-kwh{
+      font-size:16px;font-weight:700;color:#86efac;letter-spacing:.01em;
+      font-family:var(--mono);
+    }
+    .energy-today{
+      font-size:14px;font-weight:700;color:rgba(134,239,172,.7);
+      margin-top:2px;font-family:var(--mono);
     }
 
-    /* ── Gear Button ── */
+    /* ── Gear Button (Settings) ── */
     .gear-btn{
       width:38px;height:38px;border-radius:10px;
       background:rgba(255,255,255,.07);border:1.5px solid var(--border-hi);
@@ -541,14 +643,41 @@ public sealed class HttpServerService : IDisposable
       color:var(--green);transform:rotate(45deg);
     }
 
+    /* ── Top Bar Container (No overlap) ── */
+    .top-bar{
+      position:fixed;top:16px;right:18px;
+      display:flex;align-items:center;gap:10px;
+      z-index:200;
+    }
+
+    /* ── Top Settings Button ── */
+    .top-settings-btn{
+      display:inline-flex;align-items:center;gap:7px;
+      padding:6px 14px;border-radius:999px;
+      background:rgba(8,10,20,.88);
+      border:1.5px solid rgba(255,255,255,.1);
+      color:var(--t2);font-size:13px;font-weight:700;letter-spacing:.04em;
+      cursor:pointer;transition:all .2s;
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    }
+    .top-settings-btn .gear-icon{
+      font-size:15px;line-height:1;transition:transform .3s ease;
+    }
+    .top-settings-btn:hover{
+      background:var(--green-dim);border-color:rgba(74,222,128,.45);
+      color:var(--green);
+    }
+    .top-settings-btn:hover .gear-icon{
+      transform:rotate(90deg);
+    }
+
     /* ── Beacon ── */
     .beacon{
-      position:fixed;top:16px;right:16px;
       display:flex;align-items:center;gap:7px;
       padding:6px 14px;border-radius:999px;
       background:rgba(8,10,20,.88);
       border:1.5px solid rgba(255,255,255,.1);
-      backdrop-filter:blur(12px);z-index:200;
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
       transition:border-color .3s;
     }
     .beacon.live{border-color:rgba(74,222,128,.3)}
@@ -562,6 +691,8 @@ public sealed class HttpServerService : IDisposable
     }
     .beacon-lbl{font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--t3)}
     .beacon.live .beacon-lbl{color:var(--t2)}
+    .beacon-sep{opacity:0.35;margin:0 2px;font-size:12px;color:var(--t2)}
+    .beacon-hint{font-size:12px;font-weight:700;color:var(--t2);letter-spacing:0.04em}
 
     /* ── Modal ── */
     .modal-overlay{
@@ -576,12 +707,12 @@ public sealed class HttpServerService : IDisposable
     .modal-card{
       background:rgba(9,11,21,.98);
       border:1.5px solid rgba(255,255,255,.12);
-      border-radius:24px;width:560px;max-width:92vw;
+      border-radius:24px;width:620px;max-width:92vw;max-height:88vh;
       box-shadow:
         0 0 0 1px rgba(255,255,255,.04) inset,
         0 48px 96px -24px rgba(0,0,0,1),
         0 0 48px rgba(74,222,128,.08);
-      overflow:hidden;
+      overflow:hidden;display:flex;flex-direction:column;
       animation:mslide .22s cubic-bezier(.34,1.56,.64,1);
     }
     @keyframes mslide{
@@ -594,6 +725,7 @@ public sealed class HttpServerService : IDisposable
       display:flex;align-items:center;justify-content:space-between;
       border-bottom:1px solid var(--border);
       background:linear-gradient(180deg,rgba(74,222,128,.05) 0%,transparent 100%);
+      flex-shrink:0;
     }
     .modal-title{display:flex;align-items:center;gap:10px}
     .modal-dot{
@@ -610,7 +742,7 @@ public sealed class HttpServerService : IDisposable
     }
     .modal-x:hover{background:rgba(255,255,255,.14);color:var(--t1)}
 
-    .modal-body{padding:22px 28px;display:flex;flex-direction:column;gap:16px}
+    .modal-body{padding:22px 28px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;flex:1}
     .fg{display:flex;flex-direction:column;gap:6px}
     .flbl{
       font-size:13px;font-weight:800;letter-spacing:.08em;
@@ -653,6 +785,7 @@ public sealed class HttpServerService : IDisposable
       padding:16px 28px 22px;
       display:flex;align-items:center;justify-content:flex-end;gap:12px;
       border-top:1px solid var(--border);
+      flex-shrink:0;
     }
     .btn{
       padding:10px 22px;border-radius:10px;
@@ -669,17 +802,68 @@ public sealed class HttpServerService : IDisposable
       color:#052e12;box-shadow:0 0 20px rgba(34,197,94,.35);
     }
     .btn-primary:hover{background:#4ade80;box-shadow:0 0 28px rgba(74,222,128,.55);transform:translateY(-1px)}
+    .btn-danger{
+      background:rgba(239,68,68,.15);border:1.5px solid rgba(239,68,68,.3);
+      color:#fca5a5;
+    }
+    .btn-danger:hover{background:rgba(239,68,68,.25);color:#ffffff}
+
+    /* ── Settings Section Cards ── */
+    .settings-section{
+      border:1.5px solid var(--border);border-radius:16px;
+      padding:18px 22px;background:rgba(255,255,255,.02);
+    }
+    .settings-section-title{
+      font-size:14px;font-weight:800;letter-spacing:.1em;
+      text-transform:uppercase;color:var(--t2);margin-bottom:14px;
+      display:flex;align-items:center;gap:8px;
+    }
+    .settings-section-title .s-icon{font-size:16px}
+
+    /* Toggle Switch */
+    .toggle-wrap{display:flex;align-items:center;justify-content:space-between;padding:4px 0}
+    .toggle-label{font-size:15px;font-weight:700;color:var(--t1)}
+    .toggle-sub{font-size:12px;font-weight:600;color:var(--t3);margin-top:2px}
+    .toggle{
+      position:relative;width:48px;height:26px;
+      background:rgba(255,255,255,.1);border-radius:13px;
+      cursor:pointer;transition:background .2s;flex-shrink:0;
+    }
+    .toggle.active{background:rgba(74,222,128,.45)}
+    .toggle::after{
+      content:'';position:absolute;top:3px;left:3px;
+      width:20px;height:20px;border-radius:50%;
+      background:#fff;transition:transform .2s;
+    }
+    .toggle.active::after{transform:translateX(22px)}
+
+    /* Action Buttons Row */
+    .action-row{display:flex;gap:10px;flex-wrap:wrap}
+    .action-btn{
+      padding:8px 16px;border-radius:10px;
+      font-size:13px;font-weight:800;cursor:pointer;
+      background:rgba(255,255,255,.06);
+      border:1.5px solid rgba(255,255,255,.12);
+      color:var(--t2);transition:all .18s;letter-spacing:.02em;
+    }
+    .action-btn:hover{background:rgba(255,255,255,.12);color:var(--t1);border-color:var(--border-hi)}
 
     .nil{color:var(--t3)!important;font-weight:400!important}
   </style>
 </head>
 <body>
 
-<div class="beacon" id="conn">
-  <div class="beacon-dot"></div>
-  <span class="beacon-lbl" id="conn-lbl">Connecting…</span>
-  <span style="opacity:0.35;margin:0 5px;font-size:12px;color:var(--t2)">|</span>
-  <span style="font-size:12px;font-weight:700;color:var(--t2);letter-spacing:0.04em">F11: Sembunyikan • F10: Tembus Klik</span>
+<div class="top-bar">
+  <button class="top-settings-btn" id="btn-top-settings" type="button" title="Buka Pengaturan Aplikasi">
+    <span class="gear-icon">⚙</span>
+    <span>Pengaturan</span>
+  </button>
+  <div class="beacon" id="conn">
+    <div class="beacon-dot"></div>
+    <span class="beacon-lbl" id="conn-lbl">Connecting…</span>
+    <span class="beacon-sep">|</span>
+    <span class="beacon-hint">F11: Sembunyikan • F10: Tembus Klik</span>
+  </div>
 </div>
 
 <div class="stage">
@@ -845,7 +1029,7 @@ public sealed class HttpServerService : IDisposable
       </div>
     </div>
 
-    <!-- POWER & LISTRIK PLN -->
+    <!-- POWER & ELECTRICITY TRACKER -->
     <div class="card card-pwr">
       <div class="card-head">
         <div class="chip">
@@ -859,12 +1043,11 @@ public sealed class HttpServerService : IDisposable
         <span class="pwr-num" id="pwr-val">—</span><span class="pwr-unit">W</span>
       </div>
 
-      <div class="cost-panel" id="cost-panel" title="Klik untuk ubah tarif listrik">
-        <span class="cost-amt" id="pwr-cost">—</span>
-        <div class="cost-meta">
-          <span class="cost-desc" id="pwr-cost-sub">Est. Biaya Listrik PLN / bln</span>
-          <span class="cost-edit">⚙ Ubah</span>
-        </div>
+      <!-- Accumulative Energy Panel (replaces old static cost panel) -->
+      <div class="energy-panel">
+        <span class="energy-month-cost" id="energy-month-cost">—</span>
+        <span class="energy-month-kwh" id="energy-month-kwh">— kWh Bulan Ini</span>
+        <span class="energy-today" id="energy-today">Hari ini: —</span>
       </div>
     </div>
 
@@ -872,7 +1055,7 @@ public sealed class HttpServerService : IDisposable
 
 </div><!-- /stage -->
 
-<!-- PLN Settings Modal -->
+<!-- PLN Settings Modal (tarif listrik) -->
 <div class="modal-overlay" id="pln-modal" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
@@ -902,32 +1085,92 @@ public sealed class HttpServerService : IDisposable
         <input type="number" class="fctl" id="pln-custom-rate" min="1" step="0.01" value="1352" placeholder="Contoh: 1444.70">
       </div>
 
-      <div class="frow">
-        <div class="fg">
-          <label class="flbl">Jam Pemakaian / Hari</label>
-          <div class="iwrap">
-            <input type="number" class="fctl" id="pln-hours" min="1" max="24" value="8">
-            <span class="iadd">Jam</span>
-          </div>
-        </div>
-        <div class="fg">
-          <label class="flbl">Hari / Bulan</label>
-          <div class="iwrap">
-            <input type="number" class="fctl" id="pln-days" min="1" max="31" value="30">
-            <span class="iadd">Hari</span>
-          </div>
+      <div class="fg">
+        <label class="flbl">Tanggal Mulai Periode Tagihan Bulanan</label>
+        <div class="iwrap">
+          <input type="number" class="fctl" id="pln-billing-day" min="1" max="28" value="1">
+          <span class="iadd">Tgl</span>
         </div>
       </div>
 
       <div class="preview">
-        <div class="preview-lbl">Rumus Estimasi</div>
-        <div class="preview-val" id="pln-formula">(Watt / 1000) × 8 jam × 30 hari × Rp 1.352</div>
+        <div class="preview-lbl">Info Tarif Aktif</div>
+        <div class="preview-val" id="pln-formula">Tarif: Rp 1.352/kWh · Periode mulai tanggal 1</div>
       </div>
     </div>
 
     <div class="modal-foot">
       <button class="btn btn-ghost"   id="btn-reset-pln" type="button">Reset Default</button>
       <button class="btn btn-primary" id="btn-save-pln"  type="button">Simpan Pengaturan</button>
+    </div>
+  </div>
+</div>
+
+<!-- App Settings Modal -->
+<div class="modal-overlay" id="settings-modal" style="display:none">
+  <div class="modal-card" style="width:640px">
+    <div class="modal-head">
+      <div class="modal-title">
+        <div class="modal-dot"></div>
+        <h3>⚙ Pengaturan Aplikasi</h3>
+      </div>
+      <button class="modal-x" id="btn-close-settings" type="button">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- Performance Mode -->
+      <div class="settings-section">
+        <div class="settings-section-title"><span class="s-icon">🎮</span> Mode Performa</div>
+        <div class="fg">
+          <select class="fctl" id="set-mode">
+            <option value="Gamer">🎮 Mode Gamer — Hanya OSD In-Game (Hemat Resource)</option>
+            <option value="Streamer">🎥 Mode Streamer — OSD + Dashboard Window (OBS / Layar Kedua)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- In-Game OSD (RTSS) -->
+      <div class="settings-section">
+        <div class="settings-section-title"><span class="s-icon">📊</span> In-Game OSD (RTSS)</div>
+        <div class="toggle-wrap">
+          <div>
+            <div class="toggle-label">In-Game OSD (RivaTuner / RTSS)</div>
+            <div class="toggle-sub">Injeksi teks real-time ke overlay RTSS di dalam game</div>
+          </div>
+          <div class="toggle" id="set-rtss-toggle"></div>
+        </div>
+        <div class="fg" style="margin-top:12px">
+          <label class="flbl">Gaya Tampilan OSD In-Game</label>
+          <select class="fctl" id="set-rtss-style">
+            <option value="FullAllInOne">Lengkap + Hotspot + VRAM + FT (All-In-One)</option>
+            <option value="HorizontalBar">Baris Horizontal (Cyberpunk)</option>
+            <option value="StackedBlock">Kotak Bertumpuk (2 Baris)</option>
+            <option value="Minimal">Minimalis Ringkas</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- System Integration -->
+      <div class="settings-section">
+        <div class="settings-section-title"><span class="s-icon">🖥️</span> Integrasi Sistem</div>
+        <div class="toggle-wrap">
+          <div>
+            <div class="toggle-label">Run on Startup</div>
+            <div class="toggle-sub">Jalankan otomatis saat Windows login</div>
+          </div>
+          <div class="toggle" id="set-startup-toggle"></div>
+        </div>
+        <div class="action-row" style="margin-top:14px">
+          <button class="action-btn" id="set-btn-update" type="button">🔄 Periksa Pembaruan...</button>
+          <button class="action-btn" id="set-btn-restart-ws" type="button">🔌 Restart WebSocket Server</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="btn-close-settings2" type="button">Tutup</button>
     </div>
   </div>
 </div>
@@ -982,6 +1225,72 @@ function shortName(n) {
           .trim().substring(0,38);
 }
 
+// ─── PLN Config (tariff, billing) ──────────────────────────────────────────
+const DFLT=Object.assign({tier:'900_nonsubsidi',rate:1352,hours:8,days:30,label:'900 VA',billingDay:1},JSON.parse('{{{plnJson}}}'));
+let pln={...DFLT};
+let _hasLocal=false;
+try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s){pln={...DFLT,...JSON.parse(s)};_hasLocal=true;}}catch{}
+
+function syncPlnToBackend(){
+  try{
+    fetch('/api/pln', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rate: pln.rate,
+        hours: pln.hours,
+        days: pln.days,
+        tier: pln.tier,
+        label: pln.label
+      })
+    }).catch(()=>{});
+  }catch(e){}
+}
+
+// Sync PLN on startup
+(async function initPlnSync(){
+  try{
+    const r=await fetch('/api/pln',{cache:'no-store'});
+    if(r.ok){
+      const srv=await r.json();
+      if(srv && srv.rate>0){
+        if(_hasLocal && (srv.rate!==pln.rate||srv.hours!==pln.hours||srv.days!==pln.days||srv.tier!==pln.tier)){
+          syncPlnToBackend();
+        }else{
+          pln={rate:srv.rate,hours:srv.hours,days:srv.days,tier:srv.tier||pln.tier,label:srv.label||pln.label,billingDay:pln.billingDay};
+          try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
+        }
+        return;
+      }
+    }
+  }catch(e){}
+  syncPlnToBackend();
+})();
+
+// ─── Energy cost rendering ────────────────────────────────────────────────
+function renderEnergy(pw, todayKwh, monthKwh) {
+  const elMonthCost = $('energy-month-cost');
+  const elMonthKwh  = $('energy-month-kwh');
+  const elToday     = $('energy-today');
+
+  if (monthKwh != null && !isNaN(monthKwh)) {
+    const monthCost = monthKwh * pln.rate;
+    elMonthCost.textContent = 'Rp ' + Math.round(monthCost).toLocaleString('id-ID');
+    elMonthKwh.textContent  = Number(monthKwh).toFixed(2) + ' kWh Bulan Ini';
+  } else {
+    elMonthCost.textContent = '—';
+    elMonthKwh.textContent  = '— kWh Bulan Ini';
+  }
+
+  if (todayKwh != null && !isNaN(todayKwh)) {
+    const todayCost = todayKwh * pln.rate;
+    elToday.textContent = 'Hari ini: Rp ' + Math.round(todayCost).toLocaleString('id-ID') + ' (' + Number(todayKwh).toFixed(3) + ' kWh)';
+  } else {
+    elToday.textContent = 'Hari ini: —';
+  }
+}
+
+// ─── WebSocket Connect ────────────────────────────────────────────────────
 function connect() {
   const bcon=$('conn'), lbl=$('conn-lbl');
   const isS=location.protocol==='https:';
@@ -1056,10 +1365,10 @@ function connect() {
     if(f0!=null){ st(e01, Math.round(f0).toString()); e01.classList.remove('nil'); }
     else if (e01) { st(e01, '—'); e01.classList.add('nil'); }
 
-    // Power
+    // Power & Energy
     const pw=d.power?.totalW;
     st($('pwr-val'), pw!=null?Number(pw).toFixed(1):'—');
-    renderCost(pw);
+    renderEnergy(pw, d.power?.todayKwh, d.power?.monthKwh);
   }
 
   const ws=new WebSocket(url);
@@ -1079,86 +1388,29 @@ function connect() {
   };
 }
 
-// PLN settings — backend (user_settings.json via /api/pln) is the single source
-// of truth shared with the in-game RTSS OSD. Server-injected DFLT carries the
-// backend values; localStorage is only a cache of the user's last choice.
-const DFLT=Object.assign({tier:'900_nonsubsidi',rate:1352,hours:8,days:30,label:'900 VA'},JSON.parse('{{{plnJson}}}'));
-let pln={...DFLT};
-let _hasLocal=false;
-try{const s=localStorage.getItem('legaxyy_pln_cfg');if(s){pln={...DFLT,...JSON.parse(s)};_hasLocal=true;}}catch{}
-
-function syncPlnToBackend(){
-  try{
-    fetch('/api/pln', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rate: pln.rate,
-        hours: pln.hours,
-        days: pln.days,
-        tier: pln.tier,
-        label: pln.label
-      })
-    }).catch(()=>{});
-  }catch(e){}
-}
-// Sync on startup so in-game RTSS OSD matches dashboard immediately.
-// If the user has a saved local choice that the backend never received
-// (e.g. after the stale-file desync bug), push it up; otherwise adopt the
-// backend values so OSD == dashboard.
-(async function initPlnSync(){
-  try{
-    const r=await fetch('/api/pln',{cache:'no-store'});
-    if(r.ok){
-      const srv=await r.json();
-      if(srv && srv.rate>0){
-        if(_hasLocal && (srv.rate!==pln.rate||srv.hours!==pln.hours||srv.days!==pln.days||srv.tier!==pln.tier)){
-          syncPlnToBackend();
-        }else{
-          pln={rate:srv.rate,hours:srv.hours,days:srv.days,tier:srv.tier||pln.tier,label:srv.label||pln.label};
-          try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
-        }
-        renderCostLabel();
-        return;
-      }
-    }
-  }catch(e){}
-  syncPlnToBackend();
-})();
-
-function renderCostLabel(){
-  $('pwr-cost-sub').textContent=`Est. Biaya PLN (${pln.label} · ${pln.hours}h/hari) / bln`;
-}
-function renderCost(w){
-  if(w!=null&&!isNaN(w)){
-    const c=(w/1000)*pln.hours*pln.days*pln.rate;
-    $('pwr-cost').textContent='Rp '+Math.round(c).toLocaleString('id-ID');
-  }else $('pwr-cost').textContent='—';
-}
-function updateFormula(){
-  $('pln-formula').textContent=`(Watt / 1000) × ${pln.hours} jam × ${pln.days} hari × Rp ${Number(pln.rate).toLocaleString('id-ID')}`;
-}
-
+// ─── PLN Modal ─────────────────────────────────────────────────────────────
 const modal=$('pln-modal');
 const tierSel=$('pln-select-tier');
 const cgrp=$('pln-custom-group');
 const cIn=$('pln-custom-rate');
-const hIn=$('pln-hours');
-const dIn=$('pln-days');
+const bDayIn=$('pln-billing-day');
 
-function openModal(){
+function updateFormula(){
+  $('pln-formula').textContent=`Tarif: Rp ${Number(pln.rate).toLocaleString('id-ID')}/kWh · Periode mulai tanggal ${pln.billingDay||1}`;
+}
+
+function openPlnModal(){
   tierSel.value=pln.tier||'900_nonsubsidi';
   cgrp.style.display=tierSel.value==='custom'?'flex':'none';
   if(tierSel.value==='custom')cIn.value=pln.rate;
-  hIn.value=pln.hours; dIn.value=pln.days;
+  bDayIn.value=pln.billingDay||1;
   updateFormula(); modal.style.display='flex';
 }
-function closeModal(){modal.style.display='none';}
+function closePlnModal(){modal.style.display='none';}
 
-$('btn-gear').addEventListener('click',e=>{e.stopPropagation();openModal();});
-$('cost-panel').addEventListener('click',openModal);
-$('btn-close-modal').addEventListener('click',closeModal);
-modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+$('btn-gear').addEventListener('click',e=>{e.stopPropagation();openPlnModal();});
+$('btn-close-modal').addEventListener('click',closePlnModal);
+modal.addEventListener('click',e=>{if(e.target===modal)closePlnModal();});
 
 tierSel.addEventListener('change',()=>{
   if(tierSel.value==='custom'){cgrp.style.display='flex';pln.rate=Math.max(1,parseFloat(cIn.value)||1352);pln.label='Custom';}
@@ -1166,20 +1418,19 @@ tierSel.addEventListener('change',()=>{
   updateFormula();
 });
 cIn.addEventListener('input',()=>{if(tierSel.value==='custom'){pln.rate=Math.max(1,parseFloat(cIn.value)||1352);updateFormula();}});
-hIn.addEventListener('input',()=>{pln.hours=Math.max(1,Math.min(24,parseInt(hIn.value)||8));updateFormula();});
-dIn.addEventListener('input',()=>{pln.days =Math.max(1,Math.min(31,parseInt(dIn.value)||30));updateFormula();});
+bDayIn.addEventListener('input',()=>{pln.billingDay=Math.max(1,Math.min(28,parseInt(bDayIn.value)||1));updateFormula();});
 
 $('btn-save-pln').addEventListener('click',()=>{
   pln.tier=tierSel.value;
   if(pln.tier==='custom'){pln.rate=Math.max(1,parseFloat(cIn.value)||1352);pln.label='Custom';}
   else{const o=tierSel.selectedOptions[0];pln.rate=parseFloat(o.getAttribute('data-rate'));pln.label=o.getAttribute('data-label');}
-  pln.hours=Math.max(1,Math.min(24,parseInt(hIn.value)||8));
-  pln.days =Math.max(1,Math.min(31,parseInt(dIn.value)||30));
+  pln.billingDay=Math.max(1,Math.min(28,parseInt(bDayIn.value)||1));
   try{localStorage.setItem('legaxyy_pln_cfg',JSON.stringify(pln));}catch{}
   syncPlnToBackend();
-  renderCostLabel(); closeModal();
-  const pw=parseFloat($('pwr-val').textContent);
-  if(!isNaN(pw))renderCost(pw);
+  // Also update billing cycle start day in backend
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'setBillingCycleDay',value:pln.billingDay})}).catch(()=>{});
+  closePlnModal();
 });
 
 $('btn-reset-pln').addEventListener('click',()=>{
@@ -1187,12 +1438,83 @@ $('btn-reset-pln').addEventListener('click',()=>{
   try{localStorage.removeItem('legaxyy_pln_cfg');}catch{}
   syncPlnToBackend();
   tierSel.value=pln.tier; cgrp.style.display='none';
-  hIn.value=pln.hours; dIn.value=pln.days;
-  updateFormula(); renderCostLabel();
+  bDayIn.value=pln.billingDay||1;
+  updateFormula();
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'setBillingCycleDay',value:1})}).catch(()=>{});
 });
 
-renderCostLabel();
+// ─── App Settings Modal ────────────────────────────────────────────────────
+const settingsModal=$('settings-modal');
+const setMode=$('set-mode');
+const setRtssToggle=$('set-rtss-toggle');
+const setRtssStyle=$('set-rtss-style');
+const setStartupToggle=$('set-startup-toggle');
 
+// Fetch current settings from backend on load
+async function loadSettings(){
+  try{
+    const r=await fetch('/api/settings',{cache:'no-store'});
+    if(r.ok){
+      const s=await r.json();
+      if(s){
+        setMode.value=s.mode||'Streamer';
+        setRtssToggle.classList.toggle('active',!!s.rtssOsdEnabled);
+        setRtssStyle.value=s.rtssStyle||'FullAllInOne';
+        setStartupToggle.classList.toggle('active',!!s.startupEnabled);
+        if(s.billingCycleStartDay) pln.billingDay=s.billingCycleStartDay;
+      }
+    }
+  }catch{}
+}
+
+function openSettingsModal(){
+  loadSettings();
+  settingsModal.style.display='flex';
+}
+function closeSettingsModal(){settingsModal.style.display='none';}
+
+$('btn-top-settings').addEventListener('click',openSettingsModal);
+$('btn-close-settings').addEventListener('click',closeSettingsModal);
+$('btn-close-settings2').addEventListener('click',closeSettingsModal);
+settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)closeSettingsModal();});
+
+// Settings actions — send to backend via API
+setMode.addEventListener('change',()=>{
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'setMode',value:setMode.value})}).catch(()=>{});
+});
+
+setRtssToggle.addEventListener('click',()=>{
+  const active=!setRtssToggle.classList.contains('active');
+  setRtssToggle.classList.toggle('active',active);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'toggleRtssOsd',value:active})}).catch(()=>{});
+});
+
+setRtssStyle.addEventListener('change',()=>{
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'setRtssStyle',value:setRtssStyle.value})}).catch(()=>{});
+});
+
+setStartupToggle.addEventListener('click',()=>{
+  const active=!setStartupToggle.classList.contains('active');
+  setStartupToggle.classList.toggle('active',active);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'toggleStartup',value:active})}).catch(()=>{});
+});
+
+$('set-btn-update').addEventListener('click',()=>{
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'checkUpdate'})}).catch(()=>{});
+});
+
+$('set-btn-restart-ws').addEventListener('click',()=>{
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'restartWs'})}).catch(()=>{});
+});
+
+// ─── Auto-scale ────────────────────────────────────────────────────────────
 function autoScale(){
   const sx=window.innerWidth/1920,sy=window.innerHeight/1080,s=Math.min(sx,sy);
   const el=document.body;
@@ -1208,6 +1530,7 @@ connect();
 </script>
 </body>
 </html>
+
 """;
     }
 

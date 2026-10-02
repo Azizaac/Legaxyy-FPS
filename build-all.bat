@@ -33,13 +33,13 @@ if errorlevel 1 (
 )
 
 echo 4. Copying installer to web-server/downloads...
-if exist ".\Release\LegaxyyFPS_Setup_v1.2.1.exe" (
-    copy /y ".\Release\LegaxyyFPS_Setup_v1.2.1.exe" ".\web-server\downloads\LegaxyyFPS_Setup_v1.2.1.exe" >nul
+if exist ".\Release\LegaxyyFPS_Setup_v1.3.0.exe" (
+    copy /y ".\Release\LegaxyyFPS_Setup_v1.3.0.exe" ".\web-server\downloads\LegaxyyFPS_Setup_v1.3.0.exe" >nul
 )
 
 echo =======================================================
 echo   BUILD SUCCESS! Installer is ready:
-echo   - Release\LegaxyyFPS_Setup_v1.2.1.exe
-echo   - web-server\downloads\LegaxyyFPS_Setup_v1.2.1.exe
+echo   - Release\LegaxyyFPS_Setup_v1.3.0.exe
+echo   - web-server\downloads\LegaxyyFPS_Setup_v1.3.0.exe
 echo =======================================================
 pause

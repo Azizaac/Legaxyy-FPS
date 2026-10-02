@@ -1,13 +1,13 @@
 [Setup]
 AppName=LegaxyyFPS
-AppVersion=1.2.1
+AppVersion=1.3.0
 DefaultDirName={autopf}\LegaxyyFPS
 DefaultGroupName=LegaxyyFPS
 UninstallDisplayIcon={app}\LegaxyyFPS.exe
 Compression=lzma2
 SolidCompression=yes
 OutputDir=Release
-OutputBaseFilename=LegaxyyFPS_Setup_v1.2.1
+OutputBaseFilename=LegaxyyFPS_Setup_v1.3.0
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64

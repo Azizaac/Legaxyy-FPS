@@ -19,6 +19,7 @@ public class UserSettings
     public int PlnDays { get; set; } = 30;
     public string PlnTier { get; set; } = "900_nonsubsidi";
     public string PlnLabel { get; set; } = "900 VA";
+    public int BillingCycleStartDay { get; set; } = 1;
 }
 
 /// <summary>
@@ -36,6 +37,7 @@ public sealed class TrayApp : IDisposable
     private readonly WsBroadcastServer _wsServer;
     private readonly HttpServerService _httpServer;
     private readonly UpdateService _updateService;
+    private readonly EnergyTrackerService _energyService;
 
     // ─── settings ────────────────────────────────────────────────────────────
     private UserSettings _settings;
@@ -44,15 +46,8 @@ public sealed class TrayApp : IDisposable
     // ─── tray UI ─────────────────────────────────────────────────────────────
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _statusItem;
-    private readonly ToolStripMenuItem _modeGamerItem;
-    private readonly ToolStripMenuItem _modeStreamerItem;
     private readonly ToolStripMenuItem _rtssOsdToggleItem;
-    private readonly ToolStripMenuItem _rtssStyleAllInOne;
-    private readonly ToolStripMenuItem _rtssStyleHorizontal;
-    private readonly ToolStripMenuItem _rtssStyleStacked;
-    private readonly ToolStripMenuItem _rtssStyleMinimal;
     private readonly ToolStripMenuItem _showDashboardItem;
-    private readonly ToolStripMenuItem _startupItem;
     private readonly System.Windows.Forms.Timer _statusTimer;
     
     private OverlayWindow? _overlayWindow;
@@ -80,8 +75,9 @@ public sealed class TrayApp : IDisposable
         _hwService     = new HardwareMonitorService(hwInterval, _logger);
         _rtssService   = new RtssReaderService(fpsInterval, _logger);
         _powerService  = new PowerAggregatorService(_hwService, _logger);
+        _energyService = new EnergyTrackerService(_powerService, _logger, _settings.BillingCycleStartDay);
         _rtssOsdWriter = new RtssOsdWriterService(_hwService, _rtssService, _powerService, config, _logger);
-        _wsServer      = new WsBroadcastServer(wsPort, broadcastInterval, _hwService, _rtssService, _powerService, _logger);
+        _wsServer      = new WsBroadcastServer(wsPort, broadcastInterval, _hwService, _rtssService, _powerService, _energyService, _logger);
         _httpServer    = new HttpServerService(_httpPort, wsPort, _logger);
         _updateService = new UpdateService(config, _logger);
 
@@ -98,6 +94,63 @@ public sealed class TrayApp : IDisposable
             SaveUserSettings();
         };
 
+        // ─── Dashboard Settings UI → backend event handlers ──────────────────────
+        _httpServer.ModeChanged += (mode) =>
+        {
+            if (this._disposed) return;
+            // Must run on UI thread since it manipulates Forms
+            _trayIcon.ContextMenuStrip?.Invoke((MethodInvoker)(() => ApplyMode(mode, notifyUser: false)));
+        };
+
+        _httpServer.RtssOsdToggled += (enabled) =>
+        {
+            if (this._disposed) return;
+            _rtssOsdWriter.IsEnabled = enabled;
+            _rtssOsdToggleItem.Checked = enabled;
+            _settings.RtssOsdEnabled = enabled;
+            SaveUserSettings();
+            _httpServer.UpdateRtssState(enabled, _settings.RtssStyle);
+        };
+
+        _httpServer.RtssStyleChanged += (styleName) =>
+        {
+            if (this._disposed) return;
+            if (Enum.TryParse<RtssOsdStyle>(styleName, out var style))
+            {
+                _rtssOsdWriter.Style = style;
+                _settings.RtssStyle = style.ToString();
+                SaveUserSettings();
+                _httpServer.UpdateRtssState(_settings.RtssOsdEnabled, _settings.RtssStyle);
+            }
+        };
+
+        _httpServer.StartupToggled += (enable) =>
+        {
+            if (this._disposed) return;
+            _trayIcon.ContextMenuStrip?.Invoke((MethodInvoker)(() => ToggleStartup(enable)));
+        };
+
+        _httpServer.RestartWsRequested += () =>
+        {
+            if (this._disposed) return;
+            _logger.Info("TrayApp: Dashboard requested WebSocket server restart.");
+            _wsServer.Restart();
+        };
+
+        _httpServer.CheckUpdateRequested += () =>
+        {
+            if (this._disposed) return;
+            _ = Task.Run(async () => await _updateService.CheckForUpdatesAsync(isManualCheck: true));
+        };
+
+        _httpServer.BillingCycleStartDayChanged += (day) =>
+        {
+            if (this._disposed) return;
+            _settings.BillingCycleStartDay = day;
+            SaveUserSettings();
+            _energyService.UpdateBillingCycleStartDay(day);
+        };
+
         if (_settings.PlnRate > 0)
         {
             _rtssOsdWriter.UpdatePlnConfig(_settings.PlnRate, _settings.PlnHours, _settings.PlnDays);
@@ -110,55 +163,20 @@ public sealed class TrayApp : IDisposable
         else
             _rtssOsdWriter.Style = RtssOsdStyle.FullAllInOne;
 
-        // Build context menu
+        // Build simplified context menu (detailed settings moved to Dashboard UI)
         _statusItem = new ToolStripMenuItem("Status: Starting…") { Enabled = false };
-
-        // 2 Modes: Gamer (OSD Only) vs Streamer (OSD + Dashboard)
-        _modeGamerItem = new ToolStripMenuItem("🎮 Mode Gamer (Hanya OSD In-Game)", null, OnModeGamerClicked);
-        _modeStreamerItem = new ToolStripMenuItem("🎥 Mode Streamer (OSD + Dashboard Window)", null, OnModeStreamerClicked);
-
-        // RTSS In-Game OSD Injection controls
-        _rtssOsdToggleItem = new ToolStripMenuItem("📊 In-Game OSD (RivaTuner / RTSS)", null, OnToggleRtssOsdClicked)
+        _showDashboardItem = new ToolStripMenuItem("🖥️ Buka Dashboard", null, OnToggleDashboardClicked);
+        _rtssOsdToggleItem = new ToolStripMenuItem("📊 Toggle In-Game OSD (On/Off)", null, OnToggleRtssOsdClicked)
         {
             Checked = _rtssOsdWriter.IsEnabled
         };
-        
-        var rtssStyleMenu = new ToolStripMenuItem("🎨 Gaya Tampilan OSD In-Game");
-        _rtssStyleAllInOne   = new ToolStripMenuItem("Lengkap + Hotspot + VRAM + FT (All-In-One)", null, (_, _) => SetRtssStyle(RtssOsdStyle.FullAllInOne));
-        _rtssStyleHorizontal = new ToolStripMenuItem("Baris Horizontal (Cyberpunk)", null, (_, _) => SetRtssStyle(RtssOsdStyle.HorizontalBar));
-        _rtssStyleStacked    = new ToolStripMenuItem("Kotak Bertumpuk (2 Baris)", null, (_, _) => SetRtssStyle(RtssOsdStyle.StackedBlock));
-        _rtssStyleMinimal    = new ToolStripMenuItem("Minimalis Ringkas", null, (_, _) => SetRtssStyle(RtssOsdStyle.Minimal));
-        
-        rtssStyleMenu.DropDownItems.Add(_rtssStyleAllInOne);
-        rtssStyleMenu.DropDownItems.Add(_rtssStyleHorizontal);
-        rtssStyleMenu.DropDownItems.Add(_rtssStyleStacked);
-        rtssStyleMenu.DropDownItems.Add(_rtssStyleMinimal);
-        UpdateRtssStyleMenuChecks(_rtssOsdWriter.Style);
-
-        // Dashboard Window controls
-        _showDashboardItem = new ToolStripMenuItem("🖥️ Buka Jendela Dashboard (F11)", null, OnToggleDashboardClicked)
-        {
-            Checked = false
-        };
-
-        _startupItem = new ToolStripMenuItem("Run on Startup", null, OnStartupToggleClicked) { Checked = IsStartupTaskEnabled() };
-        var checkUpdateItem = new ToolStripMenuItem("Periksa Pembaruan...", null, OnCheckUpdateClicked);
-        var restartItem = new ToolStripMenuItem("Restart WebSocket Server", null, OnRestartClicked);
-        var exitItem    = new ToolStripMenuItem("Exit", null, OnExitClicked);
+        var exitItem = new ToolStripMenuItem("❌ Keluar / Exit", null, OnExitClicked);
 
         var contextMenu = new ContextMenuStrip();
         contextMenu.Items.Add(_statusItem);
         contextMenu.Items.Add(new ToolStripSeparator());
-        contextMenu.Items.Add(_modeGamerItem);
-        contextMenu.Items.Add(_modeStreamerItem);
-        contextMenu.Items.Add(new ToolStripSeparator());
-        contextMenu.Items.Add(_rtssOsdToggleItem);
-        contextMenu.Items.Add(rtssStyleMenu);
         contextMenu.Items.Add(_showDashboardItem);
-        contextMenu.Items.Add(new ToolStripSeparator());
-        contextMenu.Items.Add(_startupItem);
-        contextMenu.Items.Add(checkUpdateItem);
-        contextMenu.Items.Add(restartItem);
+        contextMenu.Items.Add(_rtssOsdToggleItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(exitItem);
 
@@ -179,10 +197,21 @@ public sealed class TrayApp : IDisposable
         // Start services
         _hwService.Start();
         _rtssService.Start();
+        _energyService.Start();
         _rtssOsdWriter.Start();
         _wsServer.Start();
         _httpServer.Start();
         _statusTimer.Start();
+
+        // Push initial settings state to HTTP server for dashboard API
+        _httpServer.SetSettingsState(
+            _settings.Mode,
+            _settings.RtssOsdEnabled,
+            _settings.RtssStyle,
+            IsStartupTaskEnabled(),
+            _settings.BillingCycleStartDay,
+            _wsServer.ClientCount
+        );
 
         RefreshStatus();
         _logger.Info($"TrayApp: Initialized. WS port={wsPort}, HTTP port={_httpPort}");
@@ -199,24 +228,13 @@ public sealed class TrayApp : IDisposable
     }
 
     // ─── Mode handling ───────────────────────────────────────────────────────
-    private void OnModeGamerClicked(object? sender, EventArgs e)
-    {
-        ApplyMode("Gamer", notifyUser: true);
-    }
-
-    private void OnModeStreamerClicked(object? sender, EventArgs e)
-    {
-        ApplyMode("Streamer", notifyUser: true);
-    }
-
     private void ApplyMode(string mode, bool notifyUser)
     {
         _settings.Mode = mode;
         SaveUserSettings();
+        _httpServer.UpdateMode(mode);
 
         bool isStreamer = string.Equals(mode, "Streamer", StringComparison.OrdinalIgnoreCase);
-        _modeStreamerItem.Checked = isStreamer;
-        _modeGamerItem.Checked    = !isStreamer;
 
         if (isStreamer)
         {
@@ -236,7 +254,7 @@ public sealed class TrayApp : IDisposable
                 _trayIcon.ShowBalloonTip(
                     2000,
                     "LegaxyyFPS - Mode Streamer",
-                    "Mode Streamer AKTIF: OSD In-Game & Jendela Dashboard aktif untuk OBS / Layar Kedua. Tekan F11 untuk sembunyikan dashboard kapan saja.",
+                    "Mode Streamer AKTIF: OSD In-Game & Jendela Dashboard aktif untuk OBS / Layar Kedua.",
                     ToolTipIcon.Info
                 );
             }
@@ -255,7 +273,7 @@ public sealed class TrayApp : IDisposable
                 _trayIcon.ShowBalloonTip(
                     2000,
                     "LegaxyyFPS - Mode Gamer",
-                    "Mode Gamer AKTIF: Hanya OSD In-Game yang aktif. Jendela Dashboard ditutup agar performa game maksimal (hemat CPU/GPU/RAM).",
+                    "Mode Gamer AKTIF: Hanya OSD In-Game yang aktif. Dashboard ditutup agar performa game maksimal.",
                     ToolTipIcon.Info
                 );
             }
@@ -292,6 +310,7 @@ public sealed class TrayApp : IDisposable
         _rtssOsdToggleItem.Checked = _rtssOsdWriter.IsEnabled;
         _settings.RtssOsdEnabled = _rtssOsdWriter.IsEnabled;
         SaveUserSettings();
+        _httpServer.UpdateRtssState(_settings.RtssOsdEnabled, _settings.RtssStyle);
 
         _trayIcon.ShowBalloonTip(
             1500,
@@ -299,22 +318,6 @@ public sealed class TrayApp : IDisposable
             _rtssOsdWriter.IsEnabled ? "OSD In-Game (RivaTuner) AKTIF" : "OSD In-Game NONAKTIF",
             ToolTipIcon.Info
         );
-    }
-
-    private void SetRtssStyle(RtssOsdStyle style)
-    {
-        _rtssOsdWriter.Style = style;
-        _settings.RtssStyle = style.ToString();
-        SaveUserSettings();
-        UpdateRtssStyleMenuChecks(style);
-    }
-
-    private void UpdateRtssStyleMenuChecks(RtssOsdStyle style)
-    {
-        _rtssStyleAllInOne.Checked   = (style == RtssOsdStyle.FullAllInOne);
-        _rtssStyleHorizontal.Checked = (style == RtssOsdStyle.HorizontalBar);
-        _rtssStyleStacked.Checked    = (style == RtssOsdStyle.StackedBlock);
-        _rtssStyleMinimal.Checked    = (style == RtssOsdStyle.Minimal);
     }
 
     // ─── Settings persistence ────────────────────────────────────────────────
@@ -360,7 +363,11 @@ public sealed class TrayApp : IDisposable
 
     private void OnStartupToggleClicked(object? sender, EventArgs e)
     {
-        bool enable = !_startupItem.Checked;
+        ToggleStartup(!IsStartupTaskEnabled());
+    }
+
+    private void ToggleStartup(bool enable)
+    {
         try
         {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
@@ -392,7 +399,7 @@ public sealed class TrayApp : IDisposable
             
             if (process.ExitCode == 0)
             {
-                _startupItem.Checked = enable;
+                _httpServer.UpdateStartupState(enable);
                 _logger.Info($"TrayApp: Run on startup set to {enable}");
             }
             else
@@ -457,6 +464,7 @@ public sealed class TrayApp : IDisposable
             : "Status: Stopped";
         _statusItem.Text = status;
         _trayIcon.Text   = $"LegaxyyFPS\n{status}";
+        _httpServer.UpdateWsClientCount(_wsServer.ClientCount);
     }
 
     // ─── icon helper ─────────────────────────────────────────────────────────
@@ -483,6 +491,7 @@ public sealed class TrayApp : IDisposable
         _statusTimer.Stop();
         _statusTimer.Dispose();
         _rtssOsdWriter.Dispose();
+        _energyService.Dispose();
         _httpServer.Dispose();
         _wsServer.Dispose();
         _rtssService.Dispose();

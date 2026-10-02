@@ -1,6 +1,6 @@
 {
-  "version": "1.2.1",
-  "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.2.1.exe",
-  "changelog": "- PERBAIKAN KRITIS: Dashboard blank + \"Connecting...\" terus saat memakai tarif 1.300/3.500/6.600 VA (bug koma desimal yang merusak script dashboard) — pengguna v1.2.0 wajib update\n- Tarif kini dikirim sebagai JSON agar kebal terhadap format angka Windows Indonesia\n- PERBAIKAN: Tarif PLN di OSD in-game sekarang selalu sync dengan dashboard (tidak lagi nyangkut di 900 VA)\n- Dashboard jadi acuan tunggal: ganti golongan daya lalu Simpan, OSD ikut berubah dalam <1 detik\n- Sinkronisasi otomatis setiap dashboard dibuka, termasuk memulihkan setting yang sempat desync",
+  "version": "1.3.0",
+  "downloadUrl": "https://fps.legaxyy.my.id/downloads/LegaxyyFPS_Setup_v1.3.0.exe",
+  "changelog": "- FITUR BARU: Tracker listrik akumulatif real-time — biaya kWh harian & bulanan dihitung otomatis dari pemakaian daya sebenarnya (bukan lagi estimasi statis)\n- FITUR BARU: Semua pengaturan kini ada di Dashboard — buka via tombol ⚙ di pojok kanan atas (Mode, OSD RTSS, Startup, dll.)\n- Menu System Tray disederhanakan: hanya Status, Buka Dashboard, Toggle OSD, dan Keluar\n- POWER card kini menampilkan: Watt real-time, biaya bulan ini (Rp + kWh), dan biaya hari ini\n- Periode tagihan bisa diatur (tgl mulai 1–28)\n- Data pemakaian listrik disimpan otomatis setiap 60 detik ke file JSON lokal",
   "mandatory": false
 }

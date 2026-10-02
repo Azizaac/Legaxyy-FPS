@@ -16,6 +16,7 @@ public sealed class WsBroadcastServer : IDisposable
     private readonly HardwareMonitorService _hwService;
     private readonly RtssReaderService _rtssService;
     private readonly PowerAggregatorService _powerService;
+    private readonly EnergyTrackerService _energyService;
     private readonly AppLogger _logger;
     private readonly int _port;
     private readonly int _broadcastIntervalMs;
@@ -44,6 +45,7 @@ public sealed class WsBroadcastServer : IDisposable
         HardwareMonitorService hwService,
         RtssReaderService rtssService,
         PowerAggregatorService powerService,
+        EnergyTrackerService energyService,
         AppLogger logger)
     {
         _port                = port;
@@ -51,6 +53,7 @@ public sealed class WsBroadcastServer : IDisposable
         _hwService           = hwService;
         _rtssService         = rtssService;
         _powerService        = powerService;
+        _energyService       = energyService;
         _logger              = logger;
     }
 
@@ -252,7 +255,9 @@ public sealed class WsBroadcastServer : IDisposable
             power = new
             {
                 totalW     = power.TotalW,
-                isEstimate = power.IsEstimate
+                isEstimate = power.IsEstimate,
+                todayKwh   = Math.Round(_energyService.GetTodayKwh(), 4),
+                monthKwh   = Math.Round(_energyService.GetMonthKwh(), 4)
             }
         };
     }
