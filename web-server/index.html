@@ -3,266 +3,1199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LegaxyyFPS — Realtime Gaming & Hardware Overlay</title>
-  <meta name="description" content="Overlay native Windows untuk monitor FPS, suhu & daya CPU/GPU, RAM, plus kalkulator biaya listrik PLN secara realtime.">
+  <title>LegaxyyFPS — Native Windows Hardware & FPS Overlay + Realtime Electricity Tracker</title>
+  <meta name="description" content="Aplikasi overlay gaming native Windows yang ringan & presisi: monitor FPS, suhu & clock CPU/GPU, fan RPM, plus kalkulator & tracker biaya listrik PLN akumulatif secara real-time.">
+  <meta name="theme-color" content="#030712">
+
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
   <style>
-    :root{
-      --bg:#060810;
-      --surface:rgba(12,15,26,.88);
-      --border:rgba(255,255,255,.09);
-      --border-hi:rgba(255,255,255,.18);
-      --t1:#fff; --t2:#cbd5e1; --t3:#64748b;
-      --cpu:#38bdf8; --gpu:#c084fc; --fps:#fb923c; --pwr:#f472b6; --pln:#4ade80;
-      --accent:#3b82f6; --accent2:#8b5cf6;
-      --mono:'JetBrains Mono',monospace;
+    :root {
+      --bg: #030712;
+      --bg-alt: #080d1a;
+      --card-bg: rgba(13, 19, 36, 0.72);
+      --card-hover: rgba(20, 29, 54, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hi: rgba(255, 255, 255, 0.16);
+      --border-glow: rgba(56, 189, 248, 0.35);
+
+      --t1: #f8fafc;
+      --t2: #94a3b8;
+      --t3: #475569;
+
+      --cyan: #38bdf8;
+      --cyan-dim: rgba(56, 189, 248, 0.12);
+      --purple: #c084fc;
+      --purple-dim: rgba(192, 132, 252, 0.12);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.12);
+      --orange: #fb923c;
+      --orange-dim: rgba(251, 146, 60, 0.12);
+      --pink: #f472b6;
+      --pink-dim: rgba(244, 114, 182, 0.12);
+      --blue: #3b82f6;
+
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     }
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html{scroll-behavior:smooth}
-    body{
-      background:var(--bg);color:var(--t1);
-      font-family:'Inter',system-ui,sans-serif;
-      min-height:100vh;overflow-x:hidden;line-height:1.6;
-      -webkit-font-smoothing:antialiased;
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    /* ambient background */
-    .bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;
-      background:
-        radial-gradient(ellipse 900px 550px at 15% 0%,rgba(56,189,248,.07) 0%,transparent 65%),
-        radial-gradient(ellipse 900px 550px at 85% 5%,rgba(139,92,246,.08) 0%,transparent 65%),
-        radial-gradient(ellipse 700px 450px at 85% 95%,rgba(244,114,182,.05) 0%,transparent 65%),
-        radial-gradient(ellipse 700px 450px at 10% 95%,rgba(74,222,128,.045) 0%,transparent 65%);
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+      color: var(--t1);
+      font-family: var(--sans);
     }
-    .bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-      background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
-                       linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
-      background-size:56px 56px;
-      mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
-      -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
+
+    body {
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
     }
-    header{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-      background:rgba(6,8,16,.72);border-bottom:1px solid var(--border)}
-    .nav{max-width:1120px;margin:0 auto;padding:.9rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
-    .logo{font-size:1.25rem;font-weight:900;letter-spacing:-.02em;color:#fff;text-decoration:none;display:flex;align-items:center;gap:.6rem}
-    .logo-badge{background:linear-gradient(135deg,#2563eb,#8b5cf6);padding:.15rem .6rem;border-radius:7px;
-      font-size:.72rem;font-weight:800;box-shadow:0 0 18px rgba(99,102,241,.5)}
-    .nav-links a{color:var(--t2);text-decoration:none;font-size:.92rem;font-weight:600;margin-left:1.6rem;transition:color .2s}
-    .nav-links a:hover{color:#fff}
-    .nav-cta{border:1px solid var(--border-hi);background:rgba(255,255,255,.06);padding:.5rem 1.1rem;border-radius:10px!important;transition:all .2s!important}
-    .nav-cta:hover{background:rgba(255,255,255,.12)!important;box-shadow:0 0 20px rgba(139,92,246,.35)}
-    main{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:4.5rem 1.5rem 5rem}
-    /* hero */
-    .hero{text-align:center;margin-bottom:4.5rem;animation:rise .7s cubic-bezier(.2,.7,.3,1) both}
-    @keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
-    .version-tag{display:inline-flex;align-items:center;gap:.55rem;padding:.42rem 1.05rem;border-radius:9999px;
-      font-size:.83rem;font-weight:700;color:#93c5fd;
-      background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);
-      box-shadow:0 0 24px rgba(59,130,246,.25);margin-bottom:1.6rem}
-    .version-tag .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80;animation:pulse 1.8s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    h1{font-size:clamp(2.3rem,5.2vw,3.6rem);font-weight:900;line-height:1.12;letter-spacing:-.03em;margin-bottom:1.2rem;
-      background:linear-gradient(180deg,#fff 30%,#94a3b8 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-    h1 .grad{background:linear-gradient(90deg,#38bdf8,#8b5cf6,#f472b6);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-    .hero-desc{font-size:1.12rem;color:var(--t2);max-width:660px;margin:0 auto 2.4rem}
-    .hero-desc b{color:#fff}
-    .cta-row{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem}
-    .btn-primary{display:inline-flex;align-items:center;gap:.7rem;padding:.95rem 2.1rem;border-radius:13px;
-      background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;text-decoration:none;
-      font-weight:800;font-size:1.03rem;box-shadow:0 12px 32px -8px rgba(99,102,241,.6);
-      transition:transform .2s,box-shadow .2s}
-    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 40px -8px rgba(99,102,241,.75)}
-    .btn-secondary{display:inline-flex;align-items:center;padding:.95rem 1.8rem;border-radius:13px;
-      background:rgba(255,255,255,.05);border:1px solid var(--border-hi);color:var(--t1);text-decoration:none;
-      font-weight:700;font-size:1.03rem;transition:background .2s}
-    .btn-secondary:hover{background:rgba(255,255,255,.1)}
-    .specs-note{font-size:.83rem;color:var(--t3);font-family:var(--mono)}
-    /* HUD preview */
-    .preview-shell{margin:3.2rem auto 0;max-width:780px;border-radius:18px;overflow:hidden;text-align:left;
-      background:rgba(9,11,21,.92);border:1px solid var(--border-hi);
-      box-shadow:0 30px 70px -20px rgba(0,0,0,.8),0 0 60px -20px rgba(139,92,246,.35);
-      animation:rise .7s .12s cubic-bezier(.2,.7,.3,1) both}
-    .preview-bar{background:rgba(255,255,255,.03);padding:.7rem 1rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid var(--border)}
-    .dot-btn{width:10px;height:10px;border-radius:50%;display:inline-block}
-    .preview-title{font-size:.76rem;color:var(--t3);margin-left:.5rem;font-family:var(--mono)}
-    .hud{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;padding:1.4rem;font-family:var(--mono)}
-    .hud-stat{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);padding:1rem 1.1rem;border-radius:12px;position:relative;overflow:hidden}
-    .hud-stat::before{content:'';position:absolute;top:0;left:14px;right:14px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent)}
-    .hud-label{font-size:.68rem;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.2rem;font-family:'Inter',sans-serif;font-weight:700}
-    .hud-val{font-size:1.55rem;font-weight:800;line-height:1.15}
-    .hud-sub{font-size:.74rem;margin-top:.15rem}
-    .c-fps{color:var(--fps);text-shadow:0 0 22px rgba(251,146,60,.5)} .s-fps{color:#fdba74}
-    .c-cpu{color:var(--cpu);text-shadow:0 0 22px rgba(56,189,248,.5)} .s-cpu{color:#7dd3fc}
-    .c-gpu{color:var(--gpu);text-shadow:0 0 22px rgba(192,132,252,.5)} .s-gpu{color:#d8b4fe}
-    .c-pln{color:var(--pln);text-shadow:0 0 22px rgba(74,222,128,.5)} .s-pln{color:#86efac}
-    /* sections */
-    .section{margin-top:5.5rem}
-    .sec-head{text-align:center;margin-bottom:2.6rem}
-    .sec-kicker{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#93c5fd;
-      background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);padding:.3rem .9rem;border-radius:999px;margin-bottom:.9rem}
-    .sec-head h2{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:900;letter-spacing:-.02em;margin-bottom:.5rem}
-    .sec-head p{color:var(--t2)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.3rem}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.7rem;position:relative;overflow:hidden;
-      backdrop-filter:blur(10px);transition:transform .22s,border-color .22s,box-shadow .22s}
-    .card::before{content:'';position:absolute;top:0;left:20px;right:20px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)}
-    .card::after{content:'';position:absolute;inset:0;border-radius:16px;opacity:0;transition:opacity .25s;pointer-events:none}
-    .card:hover{transform:translateY(-5px);border-color:rgba(139,92,246,.45);box-shadow:0 20px 45px -15px rgba(0,0,0,.7),0 0 35px -10px rgba(139,92,246,.4)}
-    .card:hover::after{opacity:1;background:radial-gradient(ellipse 90% 55% at 50% 0%,rgba(139,92,246,.12) 0%,transparent 65%)}
-    .f-icon{font-size:1.9rem;margin-bottom:.9rem;display:inline-flex;width:52px;height:52px;align-items:center;justify-content:center;
-      border-radius:13px;background:rgba(255,255,255,.05);border:1px solid var(--border-hi)}
-    .card h3{font-size:1.12rem;margin-bottom:.45rem;letter-spacing:-.01em}
-    .card p{font-size:.93rem;color:var(--t2)}
-    .card code{font-family:var(--mono);font-size:.8rem;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);
-      color:#7dd3fc;padding:.1rem .45rem;border-radius:6px}
-    /* changelog */
-    .changelog-wrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.2rem;position:relative;overflow:hidden}
-    .changelog-wrap::before{content:'';position:absolute;top:0;left:24px;right:24px;height:1px;background:linear-gradient(90deg,transparent,rgba(74,222,128,.5),transparent)}
-    .changelog-box{margin-top:1.3rem;background:#0a0d17;border:1px solid var(--border);border-radius:12px;
-      padding:1.3rem 1.5rem;font-family:var(--mono);font-size:.88rem;color:#e4e4e7;white-space:pre-wrap;line-height:1.75}
-    /* download band */
-    .dl-band{margin-top:5.5rem;text-align:center;border-radius:20px;padding:3.2rem 2rem;position:relative;overflow:hidden;
-      background:linear-gradient(135deg,rgba(37,99,235,.16),rgba(124,58,237,.16));border:1px solid rgba(139,92,246,.35);
-      box-shadow:0 0 70px -20px rgba(99,102,241,.5)}
-    .dl-band h2{font-size:clamp(1.5rem,3.2vw,2.1rem);font-weight:900;letter-spacing:-.02em;margin-bottom:.6rem}
-    .dl-band p{color:var(--t2);margin-bottom:1.8rem}
-    footer{border-top:1px solid var(--border);text-align:center;padding:2.6rem 1.5rem;color:var(--t3);font-size:.87rem;position:relative;z-index:1}
-    footer b{color:var(--t2)}
-    @media (max-width:640px){.nav-links a:not(.nav-cta){display:none}.hud{grid-template-columns:1fr 1fr}}
+
+    /* ── Ambient Background Glows ── */
+    .bg-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .mesh-glow-1 {
+      position: absolute;
+      top: -150px;
+      left: 10%;
+      width: 750px;
+      height: 550px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(59, 130, 246, 0.05) 50%, transparent 70%);
+      filter: blur(80px);
+      border-radius: 50%;
+    }
+    .mesh-glow-2 {
+      position: absolute;
+      top: 50px;
+      right: 5%;
+      width: 650px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.14) 0%, rgba(236, 72, 153, 0.04) 50%, transparent 70%);
+      filter: blur(90px);
+      border-radius: 50%;
+    }
+    .mesh-glow-3 {
+      position: absolute;
+      top: 1200px;
+      left: 20%;
+      width: 800px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(74, 222, 128, 0.08) 0%, rgba(56, 189, 248, 0.03) 60%, transparent 75%);
+      filter: blur(100px);
+      border-radius: 50%;
+    }
+    .grid-lines {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(ellipse 90% 70% at 50% 10%, #000 30%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 10%, #000 30%, transparent 80%);
+    }
+
+    /* ── Header Navigation ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(3, 7, 18, 0.75);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0.9rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: #fff;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
+      font-size: 18px;
+    }
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: var(--cyan);
+      font-family: var(--mono);
+    }
+
+    .nav-menu {
+      display: flex;
+      align-items: center;
+      gap: 1.8rem;
+    }
+    .nav-link {
+      text-decoration: none;
+      color: var(--t2);
+      font-size: 0.92rem;
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+    .nav-link:hover {
+      color: #fff;
+    }
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-hi);
+      color: #fff;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.25);
+    }
+
+    /* ── Main Layout ── */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem 6rem;
+    }
+
+    /* ── Hero Section ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 5.5rem;
+    }
+    .announcement-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.4rem 1.1rem;
+      border-radius: 9999px;
+      background: rgba(74, 222, 128, 0.08);
+      border: 1px solid rgba(74, 222, 128, 0.35);
+      box-shadow: 0 0 30px rgba(74, 222, 128, 0.18);
+      color: #86efac;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 1.8rem;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 5.5vw, 4.2rem);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.035em;
+      margin-bottom: 1.4rem;
+    }
+    .text-gradient {
+      background: linear-gradient(135deg, #ffffff 20%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .text-glow {
+      background: linear-gradient(90deg, #38bdf8 0%, #a855f7 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 35px rgba(56, 189, 248, 0.4));
+    }
+    .hero-sub {
+      font-size: 1.18rem;
+      color: var(--t2);
+      max-width: 720px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.7;
+    }
+    .hero-sub strong {
+      color: #fff;
+    }
+
+    .cta-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+    }
+    .btn-download-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 1.05rem 2.4rem;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0284c7 0%, #6366f1 50%, #9333ea 100%);
+      color: #fff;
+      text-decoration: none;
+      font-size: 1.05rem;
+      font-weight: 800;
+      box-shadow: 0 16px 36px -10px rgba(99, 102, 241, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-download-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 22px 48px -10px rgba(99, 102, 241, 0.8), 0 0 35px rgba(56, 189, 248, 0.5);
+    }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1.05rem 2rem;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-hi);
+      color: var(--t1);
+      text-decoration: none;
+      font-size: 1.02rem;
+      font-weight: 700;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .badge-requirements {
+      font-size: 0.84rem;
+      color: var(--t3);
+      font-family: var(--mono);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    /* ── Realistic Interactive HUD Preview Window ── */
+    .hud-window {
+      margin: 3.5rem auto 0;
+      max-width: 980px;
+      background: rgba(8, 12, 24, 0.95);
+      border: 1.5px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      box-shadow: 
+        0 40px 100px -25px rgba(0, 0, 0, 0.9),
+        0 0 70px -15px rgba(56, 189, 248, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+      overflow: hidden;
+      text-align: left;
+      backdrop-filter: blur(25px);
+    }
+    .hud-titlebar {
+      padding: 0.8rem 1.3rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .hud-window-controls {
+      display: flex;
+      gap: 8px;
+    }
+    .hud-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .hud-dot-close { background: #ef4444; }
+    .hud-dot-min { background: #eab308; }
+    .hud-dot-max { background: #22c55e; }
+
+    .hud-titlebar-text {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--t3);
+      font-family: var(--mono);
+      letter-spacing: 0.02em;
+    }
+    .hud-beacon {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0.25rem 0.8rem;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+      font-size: 0.72rem;
+      font-weight: 800;
+      font-family: var(--mono);
+    }
+    .hud-beacon-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+      animation: pulse 1.8s infinite;
+    }
+
+    /* HUD Content Grid */
+    .hud-body {
+      padding: 1.6rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.2rem;
+      background: radial-gradient(ellipse 90% 60% at 50% -10%, rgba(56, 189, 248, 0.06) 0%, transparent 80%);
+    }
+    .hud-card {
+      background: rgba(14, 20, 38, 0.65);
+      border: 1.5px solid rgba(255, 255, 255, 0.07);
+      border-radius: 16px;
+      padding: 1.3rem;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .hud-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 15px;
+      right: 15px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    }
+    .hud-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.8rem;
+    }
+    .hud-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--t1);
+    }
+    .hud-hero-val {
+      font-family: var(--mono);
+      font-size: 2.5rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+    .hud-substat {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      color: var(--t2);
+      display: flex;
+      justify-content: space-between;
+      padding: 0.3rem 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Spesifik HUD card colors */
+    .c-cpu { color: var(--cyan); text-shadow: 0 0 25px rgba(56, 189, 248, 0.4); }
+    .c-gpu { color: var(--purple); text-shadow: 0 0 25px rgba(192, 132, 252, 0.4); }
+    .c-fps { color: var(--orange); text-shadow: 0 0 25px rgba(251, 146, 60, 0.4); }
+    .c-ram { color: var(--green); text-shadow: 0 0 25px rgba(74, 222, 128, 0.4); }
+    .c-vram { color: #818cf8; text-shadow: 0 0 25px rgba(129, 140, 248, 0.4); }
+    .c-pwr { color: var(--pink); text-shadow: 0 0 25px rgba(244, 114, 182, 0.4); }
+
+    .hud-kwh-box {
+      margin-top: 0.8rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(74, 222, 128, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%);
+      border: 1px solid rgba(74, 222, 128, 0.35);
+    }
+    .hud-kwh-title {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #86efac;
+    }
+    .hud-kwh-val {
+      font-family: var(--mono);
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #4ade80;
+    }
+
+    /* ── Features Section (Bento Grid) ── */
+    .section {
+      margin-top: 7rem;
+    }
+    .sec-header {
+      text-align: center;
+      margin-bottom: 3.5rem;
+    }
+    .sec-badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--cyan);
+      margin-bottom: 0.9rem;
+    }
+    .sec-header h2 {
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.8rem;
+    }
+    .sec-header p {
+      color: var(--t2);
+      font-size: 1.05rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .bento-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.2rem;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+    }
+    .bento-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20px;
+      right: 20px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    }
+    .bento-card:hover {
+      transform: translateY(-5px);
+      background: var(--card-hover);
+      border-color: rgba(56, 189, 248, 0.4);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 35px -10px rgba(56, 189, 248, 0.3);
+    }
+    .bento-span-2 {
+      grid-column: span 2;
+    }
+    .bento-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-hi);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      margin-bottom: 1.4rem;
+    }
+    .bento-card h3 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.6rem;
+    }
+    .bento-card p {
+      color: var(--t2);
+      font-size: 0.98rem;
+      line-height: 1.65;
+    }
+    .bento-pill {
+      display: inline-block;
+      align-self: flex-start;
+      margin-top: 1.2rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      font-family: var(--mono);
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      color: #86efac;
+    }
+
+    /* ── Version Archive & Changelog Section ── */
+    .version-archive {
+      background: rgba(8, 13, 26, 0.85);
+      border: 1.5px solid var(--border);
+      border-radius: 24px;
+      padding: 2.8rem;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    .version-archive::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 30px;
+      right: 30px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.5), transparent);
+    }
+
+    .version-item {
+      padding: 1.8rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .version-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .version-item:first-child {
+      padding-top: 0;
+    }
+
+    .version-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .version-title-group {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+    }
+    .version-tag-number {
+      font-family: var(--mono);
+      font-size: 1.35rem;
+      font-weight: 900;
+      color: #fff;
+    }
+    .badge-latest {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+    .badge-archived {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--t2);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .version-date {
+      color: var(--t3);
+      font-size: 0.85rem;
+      font-family: var(--mono);
+    }
+
+    .btn-dl-version {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.15rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-dl-version.primary {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      box-shadow: 0 8px 20px -5px rgba(99, 102, 241, 0.5);
+    }
+    .btn-dl-version.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px -5px rgba(99, 102, 241, 0.7);
+    }
+    .btn-dl-version.secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-hi);
+      color: var(--t2);
+    }
+    .btn-dl-version.secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .changelog-list {
+      background: rgba(4, 7, 18, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      line-height: 1.7;
+    }
+
+    /* ── Download CTA Banner ── */
+    .download-banner {
+      margin-top: 7rem;
+      text-align: center;
+      padding: 4.5rem 2rem;
+      border-radius: 28px;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.2) 0%, rgba(99, 102, 241, 0.15) 50%, rgba(3, 7, 18, 0.95) 100%);
+      border: 1.5px solid rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 100px -20px rgba(99, 102, 241, 0.4);
+    }
+    .download-banner h2 {
+      font-size: clamp(2rem, 4.5vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.8rem;
+    }
+    .download-banner p {
+      color: var(--t2);
+      font-size: 1.1rem;
+      margin-bottom: 2.2rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 1.5rem;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      color: var(--t3);
+      font-size: 0.9rem;
+    }
+    footer a {
+      color: var(--t2);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    footer a:hover {
+      color: var(--cyan);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .bento-grid {
+        grid-template-columns: 1fr;
+      }
+      .bento-span-2 {
+        grid-column: span 1;
+      }
+      .hud-body {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .nav-menu {
+        display: none;
+      }
+      .hud-body {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="bg-fx"></div>
-  <div class="bg-grid"></div>
 
+  <!-- Ambient background canvas -->
+  <div class="bg-canvas">
+    <div class="mesh-glow-1"></div>
+    <div class="mesh-glow-2"></div>
+    <div class="mesh-glow-3"></div>
+    <div class="grid-lines"></div>
+  </div>
+
+  <!-- Header Navigation -->
   <header>
     <div class="nav">
-      <a href="#" class="logo">LegaxyyFPS <span class="logo-badge">v1.3.0</span></a>
-      <div class="nav-links">
-        <a href="#features">Fitur</a>
-        <a href="#changelog">Changelog</a>
-        <a href="#download">Download</a>
+      <a href="#" class="brand">
+        <div class="brand-icon">⚡</div>
+        <span class="brand-title">LegaxyyFPS</span>
+        <span class="brand-badge" id="nav-badge">v1.3.0</span>
+      </a>
+
+      <div class="nav-menu">
+        <a href="#features" class="nav-link">Fitur Unggulan</a>
+        <a href="#preview" class="nav-link">Live Preview</a>
+        <a href="#versions" class="nav-link">Riwayat Versi</a>
+        <a href="https://github.com/Azizaac/Legaxyy-FPS" target="_blank" rel="noopener" class="nav-btn">
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          GitHub
+        </a>
       </div>
     </div>
   </header>
 
   <main>
     <!-- HERO -->
-    <section class="hero" id="download">
-      <div class="version-tag"><span class="dot"></span> Versi 1.3.0 Sekarang Tersedia</div>
-      <h1>Monitor Performa Gaming Kamu<br><span class="grad">Secara Realtime &amp; Ringan</span></h1>
-      <p class="hero-desc">
-        Overlay native untuk Windows yang menampilkan <b>realtime FPS</b>, suhu &amp; daya <b>CPU/GPU</b>,
-        penggunaan RAM, hingga <b>tracker biaya listrik PLN akumulatif</b> — langsung di dalam game.
+    <section class="hero">
+      <div class="announcement-badge">
+        <span class="pulse-dot"></span>
+        <span>LegaxyyFPS v1.3.0 Rilis — Fitur Tracker Listrik Akumulatif &amp; Centralized Settings!</span>
+      </div>
+
+      <h1 class="text-gradient">
+        Monitor Performa Gaming &amp; Biaya Rig Kamu<br>
+        <span class="text-glow">Secara Akurat, Ringan &amp; Realtime</span>
+      </h1>
+
+      <p class="hero-sub">
+        Aplikasi overlay native Windows dengan integrasi <strong>RTSS In-Game OSD</strong>, 
+        pembacaan sensor hardware tingkat kernel, dan <strong>tracker akumulasi biaya listrik PLN harian/bulanan</strong> tanpa drop FPS.
       </p>
-      <div class="cta-row">
-        <a href="downloads/LegaxyyFPS_Setup_v1.3.0.exe" id="downloadBtn" class="btn-primary">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Download Installer (v1.3.0)
+
+      <div class="cta-group">
+        <a href="downloads/LegaxyyFPS_Setup_v1.3.0.exe" id="mainDownloadBtn" class="btn-download-primary">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>Download Installer (v1.3.0)</span>
         </a>
-        <a href="#features" class="btn-secondary">Jelajahi Fitur</a>
+        <a href="#versions" class="btn-secondary">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Versi Sebelumnya</span>
+        </a>
       </div>
-      <p class="specs-note">Windows 10 &amp; 11 (64-bit) • ±89 MB (termasuk RTSS + WebView2)</p>
 
-      <div class="preview-shell">
-        <div class="preview-bar">
-          <span class="dot-btn" style="background:#ef4444"></span>
-          <span class="dot-btn" style="background:#eab308"></span>
-          <span class="dot-btn" style="background:#22c55e"></span>
-          <span class="preview-title">LegaxyyFPS — Live Overlay Preview</span>
+      <div class="badge-requirements">
+        <span>Windows 10 &amp; 11 (64-bit)</span> • 
+        <span>RTSS Compatible</span> • 
+        <span>Otomatis Pasang WebView2</span>
+      </div>
+
+      <!-- HUD Mockup Window -->
+      <div class="hud-window" id="preview">
+        <div class="hud-titlebar">
+          <div class="hud-window-controls">
+            <span class="hud-dot hud-dot-close"></span>
+            <span class="hud-dot hud-dot-min"></span>
+            <span class="hud-dot hud-dot-max"></span>
+          </div>
+          <div class="hud-titlebar-text">LegaxyyFPS — Live Telemetry &amp; Energy Overlay</div>
+          <div class="hud-beacon">
+            <span class="hud-beacon-dot"></span>
+            <span>Connected • 1 Client</span>
+          </div>
         </div>
-        <div class="hud">
-          <div class="hud-stat"><div class="hud-label">FPS Realtime</div><div class="hud-val c-fps">144.0</div><div class="hud-sub s-fps">Frametime: 6.9 ms</div></div>
-          <div class="hud-stat"><div class="hud-label">CPU • i5-12400F</div><div class="hud-val c-cpu">62°C</div><div class="hud-sub s-cpu">Usage: 38% • 45W</div></div>
-          <div class="hud-stat"><div class="hud-label">GPU • RTX 3060 Ti</div><div class="hud-val c-gpu">68°C</div><div class="hud-sub s-gpu">Usage: 96% • 185W</div></div>
-          <div class="hud-stat"><div class="hud-label">⚡ Listrik Bulan Ini</div><div class="hud-val c-pln">Rp 14.250</div><div class="hud-sub s-pln">10.2 kWh • 241W saat ini</div></div>
+
+        <div class="hud-body">
+          <!-- CPU -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag">CPU</span>
+              <span style="font-size:0.8rem;color:var(--t2);font-weight:700">i5-12400F</span>
+            </div>
+            <div class="hud-hero-val c-cpu">58.4<span style="font-size:1.2rem">°C</span></div>
+            <div class="hud-substat"><span>Load:</span><strong>34.2%</strong></div>
+            <div class="hud-substat"><span>Clock:</span><strong>4227 MHz</strong></div>
+            <div class="hud-substat"><span>Package Power:</span><strong>38.5 W</strong></div>
+          </div>
+
+          <!-- GPU -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag">GPU</span>
+              <span style="font-size:0.8rem;color:var(--t2);font-weight:700">RTX 3060 Ti</span>
+            </div>
+            <div class="hud-hero-val c-gpu">64.0<span style="font-size:1.2rem">°C</span></div>
+            <div class="hud-substat"><span>Hotspot:</span><strong>74.8°C</strong></div>
+            <div class="hud-substat"><span>Core Clock:</span><strong>1860 MHz</strong></div>
+            <div class="hud-substat"><span>Board Power:</span><strong>178.2 W</strong></div>
+          </div>
+
+          <!-- FPS (RTSS) -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag">FPS</span>
+              <span style="font-size:0.75rem;color:var(--orange);font-weight:800;font-family:var(--mono)">RTSS LIVE</span>
+            </div>
+            <div class="hud-hero-val c-fps">165.0<span style="font-size:1.1rem"> fps</span></div>
+            <div class="hud-substat"><span>Frametime:</span><strong>6.06 ms</strong></div>
+            <div class="hud-substat"><span>1% Low:</span><strong>138 fps</strong></div>
+            <div class="hud-substat"><span>0.1% Low:</span><strong>112 fps</strong></div>
+          </div>
+
+          <!-- RAM -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag">RAM</span>
+              <span style="font-size:0.8rem;color:var(--t2);font-weight:700">3200 MHz</span>
+            </div>
+            <div class="hud-hero-val c-ram">42<span style="font-size:1.2rem">%</span></div>
+            <div class="hud-substat"><span>Used:</span><strong>6.72 GB</strong></div>
+            <div class="hud-substat"><span>Total:</span><strong>16.0 GB</strong></div>
+          </div>
+
+          <!-- VRAM -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag">VRAM</span>
+              <span style="font-size:0.8rem;color:var(--t2);font-weight:700">GDDR6</span>
+            </div>
+            <div class="hud-hero-val c-vram">38<span style="font-size:1.2rem">%</span></div>
+            <div class="hud-substat"><span>Used:</span><strong>3.04 GB</strong></div>
+            <div class="hud-substat"><span>Total:</span><strong>8.0 GB</strong></div>
+          </div>
+
+          <!-- POWER & PLN (FITUR BARU) -->
+          <div class="hud-card">
+            <div class="hud-card-head">
+              <span class="hud-tag" style="background:rgba(244,114,182,0.15);color:var(--pink)">POWER</span>
+              <span style="font-size:0.75rem;color:#86efac;font-weight:800">TRACKER v1.3</span>
+            </div>
+            <div class="hud-hero-val c-pwr">235.8<span style="font-size:1.2rem"> W</span></div>
+            <div class="hud-kwh-box">
+              <div class="hud-kwh-title">Biaya Listrik Bulan Ini</div>
+              <div class="hud-kwh-val" id="hud-cost-preview">Rp 14.250 <span style="font-size:0.75rem;font-weight:700;color:#bbf7d0">(10.20 kWh)</span></div>
+              <div style="font-size:0.72rem;color:rgba(187,247,208,0.7);margin-top:2px;font-family:var(--mono)">Hari ini: Rp 1.200 (0.86 kWh)</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- FEATURES -->
+    <!-- FEATURES BENTO GRID -->
     <section class="section" id="features">
-      <div class="sec-head">
-        <span class="sec-kicker">Fitur Utama</span>
-        <h2>Akurat Tanpa Lag</h2>
-        <p>Dirancang untuk gamer dan power-user yang menginginkan data presisi.</p>
+      <div class="sec-header">
+        <span class="sec-badge">Kelebihan LegaxyyFPS</span>
+        <h2>Dibangun Khusus Untuk Gamer &amp; Enthusiast</h2>
+        <p>Akurasi tinggi, tanpa overhead resource, dan memberikan data yang benar-benar kamu perlukan saat gaming.</p>
       </div>
-      <div class="grid">
-        <div class="card"><div class="f-icon">🎯</div><h3>Realtime FPS &amp; Frametime</h3><p>Terintegrasi langsung dengan <code>RTSS</code> untuk framerate akurat di semua game DirectX, Vulkan, dan OpenGL — plus 1% &amp; 0.1% Low.</p></div>
-        <div class="card"><div class="f-icon">⚡</div><h3>Sensor Hardware Lengkap</h3><p>Suhu CPU/GPU + hotspot, clock, fan RPM, VRAM, dan wattase realtime via <code>LibreHardwareMonitor</code> tingkat kernel.</p></div>
-        <div class="card"><div class="f-icon">💡</div><h3>Tracker Listrik Akumulatif</h3><p><b>BARU v1.3!</b> Biaya kWh dihitung dari pemakaian sebenarnya — otomatis akumulasi harian &amp; bulanan. Mendukung semua golongan <code>450 VA – 6600 VA+</code>.</p></div>
-        <div class="card"><div class="f-icon">🔄</div><h3>In-App Auto Update</h3><p>Tidak perlu download manual! Tombol periksa pembaruan mengunduh &amp; memasang rilis terbaru langsung dari aplikasi.</p></div>
-        <div class="card"><div class="f-icon">🖥️</div><h3>Dashboard + OSD In-Game</h3><p>Mode <code>Streamer</code> untuk OBS/layar kedua, mode <code>Gamer</code> hemat resource. OSD RivaTuner selalu sync dengan dashboard.</p></div>
-        <div class="card"><div class="f-icon">⚙️</div><h3>Pengaturan Terpusat</h3><p><b>BARU v1.3!</b> Semua settings ada di Dashboard — Mode, OSD, Startup, Tarif. Tray menu jadi super simpel.</p></div>
-      </div>
-    </section>
 
-    <!-- CHANGELOG -->
-    <section class="section" id="changelog">
-      <div class="sec-head">
-        <span class="sec-kicker">Catatan Rilis</span>
-        <h2>Changelog</h2>
-        <p style="color:var(--t3);font-size:.9rem">Rilis versi 1.2.1 terbaru</p>
-      </div>
-      <div class="changelog-wrap">
-        <div class="changelog-box" id="changelogContent">
-[Versi 1.2.1]
-- PERBAIKAN KRITIS: Dashboard blank + "Connecting..." terus saat memakai tarif 1.300/3.500/6.600 VA (bug koma desimal yang merusak script dashboard). Pengguna v1.2.0 wajib update.
-- Tarif kini dikirim sebagai JSON agar kebal terhadap format angka Windows Indonesia.
+      <div class="bento-grid">
+        <!-- Card 1 (Span 2) -->
+        <div class="bento-card bento-span-2">
+          <div class="bento-icon" style="background:rgba(74,222,128,0.1);color:var(--green)">⚡</div>
+          <h3>Tracker Listrik Akumulatif (kWh Real-Time)</h3>
+          <p>
+            Bukan lagi sekadar estimasi statis! LegaxyyFPS mengukur konsumsi watt rig kamu setiap detik lalu mengkalkulasikannya menjadi total kWh riil. 
+            Data disimpan aman ke penyimpanan lokal setiap 60 detik agar kamu tahu persis berapa rupiah biaya listrik yang dihabiskan untuk sesi gaming hari ini maupun bulan ini.
+          </p>
+          <span class="bento-pill">FITUR TERBARU v1.3.0</span>
+        </div>
 
-[Versi 1.2.0]
-- PERBAIKAN: Tarif PLN di OSD in-game sekarang selalu sync dengan dashboard (tidak lagi nyangkut di 900 VA).
-- Dashboard jadi acuan tunggal: ganti golongan daya lalu Simpan, OSD ikut berubah dalam &lt;1 detik.
-- Sinkronisasi otomatis setiap dashboard dibuka, termasuk memulihkan setting yang sempat desync.
-- Tambah endpoint /api/pln (GET) untuk membaca konfigurasi tarif backend.
-- Dashboard kini selalu disajikan dari aplikasi (tidak tertimpa file index.html basi).
+        <!-- Card 2 -->
+        <div class="bento-card">
+          <div class="bento-icon" style="background:rgba(251,146,60,0.1);color:var(--orange)">🎮</div>
+          <h3>RTSS In-Game OSD Injection</h3>
+          <p>
+            Tampilkan FPS, Frametime 1% &amp; 0.1% Low, suhu, dan wattase langsung di atas game layar penuh via shared-memory RivaTuner Statistics Server tanpa input lag.
+          </p>
+          <span class="bento-pill">4 GAYA TAMPILAN OSD</span>
+        </div>
 
-[Versi 1.1.0]
-- FITUR BARU: Auto Update langsung di dalam aplikasi (tanpa download installer manual lagi).
-- Peningkatan kestabilan pembacaan FPS via RTSS shared memory bridge.
-- Optimalisasi konsumsi memori background service dan WebView2 engine.
-- Penyesuaian skema kalkulasi tarif listrik PLN 900VA &amp; 1300VA.
-- Perbaikan bug saat minimize overlay window.
+        <!-- Card 3 -->
+        <div class="bento-card">
+          <div class="bento-icon" style="background:rgba(56,189,248,0.1);color:var(--cyan)">🔬</div>
+          <h3>Sensor Hardware Tingkat Kernel</h3>
+          <p>
+            Didukung oleh LibreHardwareMonitor untuk membaca suhu inti CPU/GPU, Hotspot, Clock MHz, Fan RPM, tegangan, dan sensor PSU secara aman tanpa risiko crash.
+          </p>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="bento-card">
+          <div class="bento-icon" style="background:rgba(192,132,252,0.1);color:var(--purple)">⚙️</div>
+          <h3>Pengaturan Terpusat di Dashboard</h3>
+          <p>
+            Tidak perlu lagi mengutak-atik tray menu Windows yang ribet. Buka modal pengaturan langsung dari tombol ⚙ di dashboard untuk ganti mode, OSD, startup, dan tarif PLN.
+          </p>
+          <span class="bento-pill">BARU DI v1.3.0</span>
+        </div>
+
+        <!-- Card 5 -->
+        <div class="bento-card">
+          <div class="bento-icon" style="background:rgba(244,114,182,0.1);color:var(--pink)">🔄</div>
+          <h3>In-App Auto Update</h3>
+          <p>
+            Pemberitahuan pembaruan versi langsung muncul di dalam aplikasi. Kamu cukup klik satu tombol untuk mengunduh dan memasang versi terbaru secara instan.
+          </p>
         </div>
       </div>
     </section>
 
-    <!-- DOWNLOAD BAND -->
-    <section class="dl-band">
-      <h2>Siap Pantau Rig Kamu?</h2>
-      <p>Gratis. Install sekali, update otomatis selamanya via in-app updater.</p>
-      <a href="downloads/LegaxyyFPS_Setup_v1.2.1.exe" class="btn-primary">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-        Download v1.2.1 Sekarang
+    <!-- VERSION ARCHIVE & CHANGELOG -->
+    <section class="section" id="versions">
+      <div class="sec-header">
+        <span class="sec-badge">Arsip Rilis &amp; Unduhan</span>
+        <h2>Riwayat Versi LegaxyyFPS</h2>
+        <p>Unduh versi terbaru yang direkomendasikan atau pilih versi terdahulu sesuai kebutuhan kamu.</p>
+      </div>
+
+      <div class="version-archive" id="versionContainer">
+        <!-- Diisi secara dinamis via JavaScript dari version.json (dengan fallback default di bawah) -->
+        
+        <!-- v1.3.0 (Latest) -->
+        <div class="version-item">
+          <div class="version-item-header">
+            <div class="version-title-group">
+              <span class="version-tag-number">v1.3.0</span>
+              <span class="badge-latest">LATEST / STABLE</span>
+              <span class="version-date">2 Oktober 2026</span>
+            </div>
+            <a href="downloads/LegaxyyFPS_Setup_v1.3.0.exe" class="btn-dl-version primary">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Download Installer (v1.3.0)
+            </a>
+          </div>
+          <div class="changelog-list">
+- FITUR BARU: Tracker listrik akumulatif real-time — biaya kWh harian & bulanan dihitung otomatis dari pemakaian daya sebenarnya (bukan lagi estimasi statis)
+- FITUR BARU: Semua pengaturan kini ada di Dashboard — buka via tombol ⚙ di pojok kanan atas (Mode Gamer/Streamer, In-Game OSD RTSS, Startup, dll.)
+- Menu System Tray disederhanakan: hanya Status, Buka Dashboard, Toggle OSD, dan Keluar
+- POWER card kini menampilkan: Watt real-time, biaya bulan ini (Rp + kWh), dan biaya hari ini
+- Periode tagihan bisa diatur (tanggal mulai siklus 1–28)
+- Data pemakaian listrik disimpan otomatis setiap 60 detik ke file JSON lokal (%LocalAppData%/LegaxyyFPS/energy_log.json)
+- Perbaikan layout toolbar dashboard agar tombol pengaturan dan beacon koneksi tidak bertumpuk
+          </div>
+        </div>
+
+        <!-- v1.2.1 -->
+        <div class="version-item">
+          <div class="version-item-header">
+            <div class="version-title-group">
+              <span class="version-tag-number">v1.2.1</span>
+              <span class="badge-archived">ARCHIVED</span>
+              <span class="version-date">30 September 2026</span>
+            </div>
+            <a href="downloads/LegaxyyFPS_Setup_v1.2.1.exe" class="btn-dl-version secondary">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Download v1.2.1
+            </a>
+          </div>
+          <div class="changelog-list">
+- PERBAIKAN KRITIS: Dashboard blank + "Connecting..." terus saat memakai tarif 1.300/3.500/6.600 VA (bug koma desimal yang merusak script dashboard)
+- Tarif kini dikirim sebagai JSON agar kebal terhadap format angka Windows Indonesia
+- Peningkatan kestabilan sinkronisasi OSD RTSS
+          </div>
+        </div>
+
+        <!-- v1.2.0 -->
+        <div class="version-item">
+          <div class="version-item-header">
+            <div class="version-title-group">
+              <span class="version-tag-number">v1.2.0</span>
+              <span class="badge-archived">ARCHIVED</span>
+              <span class="version-date">28 September 2026</span>
+            </div>
+            <a href="downloads/LegaxyyFPS_Setup_v1.2.exe" class="btn-dl-version secondary">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Download v1.2.0
+            </a>
+          </div>
+          <div class="changelog-list">
+- PERBAIKAN: Tarif PLN di OSD in-game sekarang selalu sync dengan dashboard (tidak lagi nyangkut di 900 VA)
+- Dashboard jadi acuan tunggal: ganti golongan daya lalu Simpan, OSD ikut berubah dalam &lt;1 detik
+- Tambah endpoint /api/pln (GET) untuk membaca konfigurasi tarif backend
+          </div>
+        </div>
+
+        <!-- v1.1.0 -->
+        <div class="version-item">
+          <div class="version-item-header">
+            <div class="version-title-group">
+              <span class="version-tag-number">v1.1.0</span>
+              <span class="badge-archived">ARCHIVED</span>
+              <span class="version-date">25 September 2026</span>
+            </div>
+            <a href="downloads/LegaxyyFPS_Setup_v1.1.exe" class="btn-dl-version secondary">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Download v1.1.0
+            </a>
+          </div>
+          <div class="changelog-list">
+- FITUR BARU: Auto Update langsung di dalam aplikasi (tanpa download installer manual lagi)
+- Peningkatan kestabilan pembacaan FPS via RTSS shared memory bridge
+- Optimalisasi konsumsi memori background service dan WebView2 engine
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD BANNER -->
+    <section class="download-banner">
+      <h2>Mulai Monitor Rig Gaming Kamu Sekarang</h2>
+      <p>Gratis, open-source, dan siap pakai. Dilengkapi auto-updater langsung ke versi terbaru.</p>
+      <a href="downloads/LegaxyyFPS_Setup_v1.3.0.exe" class="btn-download-primary" style="margin: 0 auto;">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        <span>Unduh LegaxyyFPS v1.3.0 (64-bit)</span>
       </a>
     </section>
   </main>
 
   <footer>
-    <p><b>&copy; 2026 LegaxyyFPS.</b> Dibuat untuk komunitas gamer &amp; hardware enthusiast.</p>
+    <p>
+      <strong>LegaxyyFPS</strong> &copy; 2026. Dibuat dengan ❤️ untuk komunitas gamer &amp; hardware enthusiast Indonesia.
+    </p>
+    <p style="margin-top:0.6rem">
+      <a href="https://github.com/Azizaac/Legaxyy-FPS" target="_blank" rel="noopener">GitHub Repository</a> • 
+      <a href="#features">Fitur</a> • 
+      <a href="#versions">Riwayat Versi</a>
+    </p>
   </footer>
 
+  <!-- SCRIPT: Membaca version.json dan me-render list versi secara dinamis -->
   <script>
-    // Dinamis membaca version.json jika tersedia di server
-    fetch('version.json?t=' + Date.now())
-      .then(res => res.json())
-      .then(data => {
-        if (data.version) {
-          document.querySelectorAll('.logo-badge').forEach(el => el.textContent = 'v' + data.version);
-          var btn = document.getElementById('downloadBtn');
-          if (btn && data.downloadUrl) {
-            btn.href = data.downloadUrl;
-            btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m4 4V4"/></svg> Download Installer (v` + data.version + `)`;
-          }
+    async function loadVersionData() {
+      try {
+        const res = await fetch('version.json?t=' + Date.now());
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.version) return;
+
+        // Update badge header & main button jika ada data
+        const navBadge = document.getElementById('nav-badge');
+        if (navBadge) navBadge.textContent = 'v' + data.version;
+
+        const mainBtn = document.getElementById('mainDownloadBtn');
+        if (mainBtn && data.downloadUrl) {
+          mainBtn.href = data.downloadUrl;
+          mainBtn.innerHTML = `
+            <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download Installer (v${data.version})</span>
+          `;
         }
-        if (data.changelog) {
-          var box = document.getElementById('changelogContent');
-          if (box) box.textContent = `[Versi ` + data.version + `]\n` + data.changelog;
+
+        // Render version list jika ada previousVersions
+        if (data.previousVersions && Array.isArray(data.previousVersions)) {
+          const container = document.getElementById('versionContainer');
+          if (!container) return;
+
+          let html = `
+            <!-- Latest Version -->
+            <div class="version-item">
+              <div class="version-item-header">
+                <div class="version-title-group">
+                  <span class="version-tag-number">v${data.version}</span>
+                  <span class="badge-latest">LATEST / STABLE</span>
+                  <span class="version-date">${data.releaseDate || 'Rilis Terbaru'}</span>
+                </div>
+                <a href="${data.downloadUrl}" class="btn-dl-version primary">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  Download Installer (v${data.version})
+                </a>
+              </div>
+              <div class="changelog-list">${escapeHtml(data.changelog)}</div>
+            </div>
+          `;
+
+          data.previousVersions.forEach(prev => {
+            html += `
+              <div class="version-item">
+                <div class="version-item-header">
+                  <div class="version-title-group">
+                    <span class="version-tag-number">v${prev.version}</span>
+                    <span class="badge-archived">ARCHIVED</span>
+                    <span class="version-date">${prev.releaseDate || ''}</span>
+                  </div>
+                  <a href="${prev.downloadUrl}" class="btn-dl-version secondary">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download v${prev.version}
+                  </a>
+                </div>
+                <div class="changelog-list">${escapeHtml(prev.changelog)}</div>
+              </div>
+            `;
+          });
+
+          container.innerHTML = html;
         }
-      })
-      .catch(() => {});
+      } catch (e) {
+        console.error('Gagal memuat version.json:', e);
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    document.addEventListener('DOMContentLoaded', loadVersionData);
   </script>
 </body>
 </html>
