@@ -1,268 +1,196 @@
-# Overlay Data Bridge
+# ⚡ LegaxyyFPS
 
-A lightweight Windows background service that reads real-time PC hardware sensor data (CPU/GPU/Memory/Power) and RTSS frametime data, then broadcasts it as a JSON stream over a local WebSocket server — ready to be consumed by an HTML overlay in OBS Browser Source.
+<p align="center">
+  <img src="AppIcon.ico" width="96" height="96" alt="LegaxyyFPS Logo" />
+</p>
 
----
+<p align="center">
+  <strong>Native Windows Hardware & FPS Telemetry Overlay + Real-Time Electricity Cost Tracker</strong>
+</p>
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   OverlayDataBridge.exe                 │
-│  (System Tray, WinExe, runs as Administrator)           │
-│                                                         │
-│  ┌──────────────────────┐  ┌─────────────────────────┐  │
-│  │ HardwareMonitorService│  │   RtssReaderService     │  │
-│  │ (LibreHardwareMonitor)│  │ (RTSS Shared Memory)    │  │
-│  │ • CPU temp/load/clock │  │ • FPS current           │  │
-│  │ • GPU all sensors     │  │ • 1% / 0.1% lows        │  │
-│  │ • RAM used/total      │  │ • Frame time ms          │  │
-│  └──────────┬───────────┘  └──────────┬──────────────┘  │
-│             │                         │                  │
-│             ▼                         ▼                  │
-│  ┌──────────────────────┐  ┌─────────────────────────┐  │
-│  │ PowerAggregatorService│  │   WsBroadcastServer     │  │
-│  │ PSU sensor or estimate│  │ ws://localhost:8765     │  │
-│  └──────────┬───────────┘  └──────────┬──────────────┘  │
-│             └──────────────────────────┘                 │
-└─────────────────────────────────────────────────────────┘
-                              │  WebSocket JSON
-                    ┌─────────▼──────────┐
-                    │  OBS Browser Source │
-                    │  (your overlay.html)│
-                    └────────────────────┘
-```
+<p align="center">
+  <a href="https://github.com/Azizaac/Legaxyy-FPS/releases/latest"><img src="https://img.shields.io/badge/Release-v1.3.0-blue?style=for-the-badge&logo=windows" alt="Latest Release" /></a>
+  <a href="https://dotnet.microsoft.com/download/dotnet/8.0"><img src="https://img.shields.io/badge/.NET-8.0_Windows-512BD4?style=for-the-badge&logo=dotnet" alt=".NET 8" /></a>
+  <a href="https://www.guru3d.com/files-details/rtss-rivatuner-statistics-server-download.html"><img src="https://img.shields.io/badge/RTSS-Supported-orange?style=for-the-badge" alt="RTSS" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" /></a>
+</p>
 
 ---
 
-## Prerequisites
+## 📖 Tentang LegaxyyFPS
 
-### 1. Install RTSS (RivaTuner Statistics Server)
+**LegaxyyFPS** adalah aplikasi telemetry native Windows berkinerja tinggi yang dirancang untuk gamer, streamer, dan hardware enthusiast. 
 
-Download from: https://www.guru3d.com/files-details/rtss-rivatuner-statistics-server-download.html
+Aplikasi ini membaca data sensor PC (CPU, GPU, RAM, VRAM, Fan RPM, Clocks) tingkat kernel menggunakan **LibreHardwareMonitor**, menangkap framerate & frametime akurat via **RTSS (RivaTuner Statistics Server)**, serta menghitung **akumulasi konsumsi listrik riil (kWh & Rupiah PLN)** tanpa membebani performa gaming kamu.
 
-- Install and run RTSS before starting OverlayDataBridge
-- RTSS must be actively capturing a game for FPS data to appear
-- If RTSS is not running, the app still works — FPS fields will be `null`
+Data disajikan melalui:
+1. **In-Game OSD (RTSS)** — Disuntikkan langsung di atas layar game layar penuh (Full Screen).
+2. **Cyberpunk Dashboard Window (WebView2)** — Window overlay modern untuk monitor sekunder atau OBS Browser Source.
+3. **Local WebSocket & REST API** — Siap diintegrasikan ke perangkat lain (Stream Deck, mobile display, dll.).
 
-### 2. .NET 8 Runtime / SDK
+---
 
-Download from: https://dotnet.microsoft.com/download/dotnet/8.0
+## ✨ Fitur Unggulan
 
-Check if already installed:
-```powershell
-dotnet --version
-# Should show 8.x.x
+### ⚡ 1. Real-Time Accumulative Electricity & Cost Tracker (Baru di v1.3)
+- Mengukur konsumsi total daya sistem (Watt) setiap detik.
+- Mengakumulasikan pemakaian energi aktual: $\text{kWh} = \frac{\text{Watt} \times 1\text{s}}{3600 \times 1000}$.
+- **Hari Ini & Bulan Ini:** Melacak total kWh dan tagihan (Rp) hari ini serta siklus tagihan bulanan berjalan.
+- **Konfigurasi Fleksibel:** Mendukung seluruh golongan tarif listrik PLN (900 VA, 1.300 VA, 2.200 VA, 3.500 VA – 6.600 VA+, Subsidi, atau Custom) dan tanggal mulai siklus tagihan bulanan (tgl 1–28).
+- **Auto-Save:** Riwayat tersimpan otomatis setiap 60 detik di `%LocalAppData%\LegaxyyFPS\energy_log.json` untuk mencegah kehilangan data jika PC mati mendadak.
+
+### 🎮 2. RTSS In-Game OSD Injection
+- Menampilkan metrik real-time langsung di dalam game DirectX 9/11/12, Vulkan, dan OpenGL.
+- 4 Preset Gaya Tampilan:
+  - **Lengkap / All-In-One**: CPU + GPU + Hotspot + VRAM + Frametime + Biaya PLN.
+  - **Baris Horizontal (Cyberpunk)**: Ringkas memanjang di atas layar.
+  - **Kotak Bertumpuk**: Blok 2 baris hemat ruang.
+  - **Minimalis**: Hanya FPS, Suhu, dan Watt.
+
+### ⚙️ 3. Pengaturan Terpusat di Dashboard (Baru di v1.3)
+- Akses semua konfigurasi langsung dari tombol **`⚙ Pengaturan`** di pojok kanan atas Dashboard.
+- **Mode Performa:**
+  - 🎮 *Mode Gamer:* Hanya OSD in-game yang aktif, jendela dashboard tertutup (hemat 100% resource untuk game kompetitif).
+  - 🎥 *Mode Streamer:* OSD in-game + Jendela Dashboard aktif untuk OBS / second monitor.
+- **Integrasi Sistem:** Toggle *Run on Startup* otomatis via Windows Task Scheduler.
+- **System Tray Bersih:** Menu klik kanan tray disederhanakan hanya untuk aksi penting.
+
+### 🔄 4. In-App Auto Update
+- Terintegrasi dengan update server otomatis.
+- Deteksi versi terbaru sekali klik dan langsung download, pasang, serta restart tanpa perlu membuka browser.
+
+---
+
+## 🏗️ Arsitektur Sistem
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        LegaxyyFPS.exe (System Tray)                    │
+│                                                                        │
+│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
+│   │  HardwareMonitorService   │      │      RtssReaderService      │   │
+│   │   (LibreHardwareMonitor)  │      │    (RTSS Shared Memory)     │   │
+│   │  • CPU temp, load, clock  │      │  • FPS Realtime             │   │
+│   │  • GPU core, hotspot, fan │      │  • 1% & 0.1% Frametime Lows │   │
+│   │  • RAM / VRAM used & total│      │  • Frame time ms            │   │
+│   └─────────────┬─────────────┘      └──────────────┬──────────────┘   │
+│                 │                                   │                  │
+│                 ▼                                   ▼                  │
+│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
+│   │   PowerAggregatorService  │      │     RtssOsdWriterService    │   │
+│   │   Real PSU / Sensor HW    │      │  Injects HUD to in-game OSD │   │
+│   └─────────────┬─────────────┘      └─────────────────────────────┘   │
+│                 │                                                      │
+│                 ▼                                                      │
+│   ┌───────────────────────────┐                                        │
+│   │   EnergyTrackerService    │ ───► Auto-saves to energy_log.json     │
+│   │   Accumulates kWh & Cost  │                                        │
+│   └─────────────┬─────────────┘                                        │
+│                 │                                                      │
+│                 ▼                                                      │
+│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
+│   │    WsBroadcastServer      │      │      HttpServerService      │   │
+│   │  ws://127.0.0.1:8765      │      │    http://127.0.0.1:8766    │   │
+│   │  Broadcast payload @500ms │      │  • Embedded HTML Dashboard  │   │
+│   └─────────────┬─────────────┘      │  • REST API (/api/settings) │   │
+│                 │                    └──────────────┬──────────────┘   │
+└─────────────────┼───────────────────────────────────┼──────────────────┘
+                  │                                   │
+                  ▼                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │        OverlayWindow (WebView2 Chromium Host)          │
+        │   Cyberpunk Dark Dashboard & Settings Modal UI         │
+        └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Build Instructions
+## ⌨️ Pintasan Keyboard (Hotkeys)
 
-```powershell
-# Navigate to project directory
-cd C:\Users\choir\Desktop\OverlayDataBridge
+Saat jendela Dashboard aktif atau berjalan di latar belakang:
 
-# Restore NuGet packages and build (Release)
-dotnet build -c Release
-
-# Or publish as self-contained single file (no .NET runtime required on target):
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish
-```
-
-Build output will be in:
-- `bin\Release\net8.0-windows\` (framework-dependent)
-- `publish\` (self-contained single file)
+| Hotkey | Fungsi |
+|---|---|
+| <kbd>F11</kbd> | Sembunyikan / Tampilkan Jendela Dashboard secara instan |
+| <kbd>F10</kbd> | Aktifkan / Nonaktifkan mode **Tembus Klik** (*Click-Through*) |
 
 ---
 
-## Running the Application
+## 📡 API & WebSocket Reference
 
-> ⚠️ **LibreHardwareMonitor requires Administrator privileges** to access CPU/GPU/PSU sensor data.
-
-### Option A: Run directly (right-click → Run as administrator)
-
-Double-click `OverlayDataBridge.exe` (right-click → Run as administrator).
-
-The app will appear in the **system tray** (bottom-right taskbar area). No window will open.
-
-### Option B: Run from PowerShell (admin)
-
-```powershell
-# Open PowerShell as Administrator, then:
-.\bin\Release\net8.0-windows\OverlayDataBridge.exe
-```
-
-### Tray Icon Usage
-
-| Action | Result |
-|--------|--------|
-| Right-click | Opens context menu |
-| Double-click | Shows status balloon tooltip |
-| Context → Status | Shows running state and client count |
-| Context → Restart WebSocket Server | Stops and restarts WebSocket on port 8765 |
-| Context → Exit | Gracefully shuts down all services |
-
----
-
-## WebSocket JSON Payload
-
-The server broadcasts to `ws://localhost:8765` at ~2 times/second.
-
-### Example Payload
+### 1. WebSocket Stream (`ws://127.0.0.1:8765`)
+Setiap 500ms, server menyiarkan payload JSON berisi seluruh sensor:
 
 ```json
 {
-  "cpu": { "temp": 61.2, "load": 42.5, "clock": 4350, "power": 78.1 },
-  "mem": { "load": 47.3, "usedGb": 14.8 },
-  "gpu": { "temp": 66.0, "load": 71.2, "coreClock": 2510, "memClock": 10502, "fanRpm": 1600, "vramUsedGb": 8.2, "power": 210.4 },
-  "fps": { "current": 143.7, "low1pct": 98.2, "low01pct": 71.5, "frametimeMs": 6.96 },
-  "power": { "totalW": 412.6, "isEstimate": true }
+  "device": { "cpuName": "12th Gen i5-12400F", "gpuName": "RTX 3060 Ti" },
+  "cpu": { "temp": 58.4, "load": 34.2, "clock": 4227, "power": 38.5 },
+  "gpu": { "temp": 64.0, "hotSpotTemp": 74.8, "load": 82.5, "coreClock": 1860, "memClock": 7000, "fanRpm": 1650, "power": 178.2, "vramUsedGb": 3.04, "vramTotalGb": 8.0, "vramPct": 38.0 },
+  "mem": { "usedGb": 6.72, "totalGb": 16.0, "load": 42.0, "clock": 3200 },
+  "fps": { "current": 165.0, "frametimeMs": 6.06, "low1pct": 138.0, "low01pct": 112.0 },
+  "power": {
+    "totalW": 235.8,
+    "isEstimate": false,
+    "todayKwh": 0.8624,
+    "monthKwh": 10.2045
+  }
 }
 ```
 
-### Field Reference
-
-| Field | Unit | Notes |
-|-------|------|-------|
-| `cpu.temp` | °C | Package temp (preferred) or max core |
-| `cpu.load` | % | Total CPU utilization |
-| `cpu.clock` | MHz | Average of active cores |
-| `cpu.power` | W | CPU Package power |
-| `mem.load` | % | RAM utilization |
-| `mem.usedGb` | GB | RAM in use |
-| `gpu.temp` | °C | GPU core temperature |
-| `gpu.load` | % | GPU core utilization |
-| `gpu.coreClock` | MHz | GPU core clock |
-| `gpu.memClock` | MHz | VRAM clock |
-| `gpu.fanRpm` | RPM | GPU fan speed |
-| `gpu.vramUsedGb` | GB | VRAM in use |
-| `gpu.power` | W | GPU Package power draw |
-| `fps.current` | FPS | Instantaneous FPS from RTSS |
-| `fps.low1pct` | FPS | Average of slowest 1% frames (1000-sample buffer) |
-| `fps.low01pct` | FPS | Average of slowest 0.1% frames |
-| `fps.frametimeMs` | ms | Last frame time in milliseconds |
-| `power.totalW` | W | System power (PSU sensor or estimate) |
-| `power.isEstimate` | bool | `true` if estimated (CPU+GPU+40W overhead) |
-
-> Fields unavailable due to missing hardware or RTSS not running are sent as `null`.
+### 2. REST API Endpoints (`http://127.0.0.1:8766`)
+* `GET /api/settings` — Mengambil status mode performa, status OSD, startup, dan konfigurasi.
+* `POST /api/settings` — Memperbarui pengaturan dari Dashboard:
+  * `{ "action": "setMode", "value": "Gamer" | "Streamer" }`
+  * `{ "action": "toggleRtssOsd", "value": true | false }`
+  * `{ "action": "setRtssStyle", "value": "FullAllInOne" | "HorizontalBar" | "StackedBlock" | "Minimal" }`
+  * `{ "action": "toggleStartup", "value": true | false }`
+  * `{ "action": "setBillingCycleDay", "value": 1..28 }`
+  * `{ "action": "restartWs" }`
+  * `{ "action": "checkUpdate" }`
+* `GET /api/pln` & `POST /api/pln` — Konfigurasi tarif PLN & sync ke backend OSD.
 
 ---
 
-## OBS Browser Source Setup
+## 🛠️ Prasyarat & Panduan Kompilasi
 
-1. Add a **Browser Source** in OBS
-2. Check **"Local File"** and point to your `overlay.html`
-   - Or use URL: `file:///C:/path/to/overlay.html`
-3. Set width/height to match your stream resolution
-4. In your overlay HTML, connect with:
+### Prasyarat:
+1. **Windows 10 / 11 (64-bit)**
+2. **.NET 8 SDK** (versi 8.0 ke atas)
+3. **Inno Setup 6** (opsional, jika ingin membuat file installer `.exe`)
+4. **RTSS (RivaTuner Statistics Server)** (opsional, diperlukan jika ingin mengaktifkan OSD dalam game)
 
-```javascript
-const ws = new WebSocket('ws://localhost:8765');
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // data.cpu.temp, data.fps.current, etc.
-};
-```
-
----
-
-## Auto-Start on Login (Optional)
-
-To run OverlayDataBridge automatically when Windows starts:
-
-### Method 1: Task Scheduler (Recommended — runs as admin automatically)
+### Kompilasi dari Source:
 
 ```powershell
-# Run as Administrator:
-$action  = New-ScheduledTaskAction -Execute "C:\path\to\OverlayDataBridge.exe"
-$trigger = New-ScheduledTaskTrigger -AtLogon
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -RunLevel Highest
-Register-ScheduledTask -TaskName "OverlayDataBridge" -Action $action -Trigger $trigger -Principal $principal
+# 1. Clone repository
+git clone https://github.com/Azizaac/Legaxyy-FPS.git
+cd Legaxyy-FPS
+
+# 2. Build Release Single-File
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\dist\App
+
+# 3. Atau jalankan script otomatisasi penuh (Build + Inno Setup):
+.\build-all.bat
 ```
 
-### Method 2: Startup Folder Shortcut
-
-1. Press `Win+R` → type `shell:startup` → Enter
-2. Create a shortcut to `OverlayDataBridge.exe` in that folder
-3. Right-click shortcut → Properties → Advanced → ✅ Run as administrator
+Installer setup final akan berada di: `Release\LegaxyyFPS_Setup_v1.3.0.exe`.
 
 ---
 
-## Configuration (`appsettings.json`)
+## 🌐 Server Pembaruan (aaPanel / Nginx)
 
-```json
-{
-  "WebSocketPort": 8765,
-  "HardwareUpdateIntervalMs": 1000,
-  "FpsUpdateIntervalMs": 300,
-  "BroadcastIntervalMs": 500
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `WebSocketPort` | 8765 | WebSocket server port |
-| `HardwareUpdateIntervalMs` | 1000 | How often to poll CPU/GPU/MEM sensors (ms) |
-| `FpsUpdateIntervalMs` | 300 | How often to poll RTSS shared memory (ms) |
-| `BroadcastIntervalMs` | 500 | How often to broadcast JSON to WS clients (ms) |
+Untuk memasang landing page download dan server auto-update otomatis:
+1. Upload isi folder `web-server/` (`index.html`, `version.json`, dan folder `downloads/`) ke root web server kamu (misal: `/www/wwwroot/fps.domainanda.my.id`).
+2. Masukkan URL `version.json` kamu ke `appsettings.json` di aplikasi desktop:
+   ```json
+   {
+     "UpdateUrl": "https://fps.domainanda.my.id/version.json"
+   }
+   ```
+3. Saat rilis baru tersedia, user akan otomatis menerima notifikasi pembaruan di dalam aplikasi.
 
 ---
 
-## Logging
+## 📄 Lisensi
 
-Logs are written to `logs/app.log` (relative to the executable directory).
-Log files rotate at 5 MB, keeping 5 archived copies.
-
-```
-OverlayDataBridge/
-└── logs/
-    ├── app.log              ← current log
-    ├── app.20240801_120000.log
-    └── ...
-```
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|---------|
-| No sensor data (all null) | Run as Administrator |
-| FPS always null | Make sure RTSS is running and capturing a game |
-| Port 8765 in use | Change `WebSocketPort` in `appsettings.json` |
-| Overlay not connecting | Check Windows Firewall isn't blocking `localhost:8765` |
-| App crashes on start | Check `logs/app.log` for details |
-| No GPU data | iGPU-only systems: data will show iGPU readings (Intel HD/Arc) |
-
----
-
-## Project Structure
-
-```
-OverlayDataBridge/
-├── Program.cs                          ← Entry point, WinForms message loop
-├── TrayApp.cs                          ← System tray host, owns all services
-├── Services/
-│   ├── AppLogger.cs                    ← File logger with rotation
-│   ├── HardwareMonitorService.cs       ← LibreHardwareMonitor sensor reader
-│   ├── RtssReaderService.cs            ← RTSS shared memory reader
-│   ├── PowerAggregatorService.cs       ← PSU sensor / power estimation
-│   └── WsBroadcastServer.cs            ← Fleck WebSocket server + broadcaster
-├── Models/
-│   ├── CpuData.cs
-│   ├── GpuData.cs
-│   ├── MemData.cs
-│   ├── FpsData.cs
-│   └── PowerData.cs
-├── appsettings.json                    ← Configuration
-├── app.manifest                        ← Requires admin elevation
-└── OverlayDataBridge.csproj
-```
-
----
-
-## License
-
-MIT — free to use and modify.
-"# Legaxyy-FPS" 
+Proyek ini dirilis di bawah lisensi [MIT License](LICENSE). Bebas digunakan, dimodifikasi, dan didistribusikan.
