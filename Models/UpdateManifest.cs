@@ -15,4 +15,11 @@ public sealed class UpdateManifest
 
     [JsonProperty("mandatory")]
     public bool Mandatory { get; set; } = false;
+
+    /// <summary>
+    /// SHA-256 hash (hex) of the installer file. Used to verify integrity
+    /// before launching it. Strongly recommended; required for a verified update.
+    /// </summary>
+    [JsonProperty("sha256")]
+    public string? Sha256 { get; set; }
 }

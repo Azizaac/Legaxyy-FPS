@@ -21,7 +21,7 @@ public sealed class UpdateService
         _logger = logger;
         
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
-        _currentVersion = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.2.1";
+        _currentVersion = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.3.2";
     }
 
     public string CurrentVersion => _currentVersion;

@@ -1,13 +1,13 @@
 [Setup]
 AppName=LegaxyyFPS
-AppVersion=1.3.0
+AppVersion=1.3.2
 DefaultDirName={autopf}\LegaxyyFPS
 DefaultGroupName=LegaxyyFPS
 UninstallDisplayIcon={app}\LegaxyyFPS.exe
 Compression=lzma2
 SolidCompression=yes
 OutputDir=Release
-OutputBaseFilename=LegaxyyFPS_Setup_v1.3.0
+OutputBaseFilename=LegaxyyFPS_Setup_v1.3.2
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
@@ -17,6 +17,7 @@ SetupIconFile=AppIcon.ico
 Source: "dist\App\LegaxyyFPS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\App\hardware_power.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\App\Uninstall_Overlay.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "dist\App\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall skipifsourcedoesntexist
 Source: "dist\App\MSIAfterburnerSetup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall skipifsourcedoesntexist

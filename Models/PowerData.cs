@@ -8,4 +8,7 @@ public class PowerData
     // ─── Accumulative energy tracking ────────────────────────────────────────
     public double? TodayKwh { get; set; }
     public double? MonthKwh { get; set; }
+
+    // ─── Auto component breakdown (estimation) ───────────────────────────────
+    public PowerBreakdown? Breakdown { get; set; }
 }

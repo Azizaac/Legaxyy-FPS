@@ -28,6 +28,7 @@ public event Action<bool>? StartupToggled;             // true/false
 public event Action? RestartWsRequested;
 public event Action? CheckUpdateRequested;
 public event Action<int>? BillingCycleStartDayChanged; // 1-28
+public event Action<string>? DeviceTypeChanged;        // "Auto" | "Desktop" | "Laptop"
 
 // ─── State exposed to dashboard settings UI ──────────────────────────────
 private string _currentMode = "Streamer";
@@ -36,6 +37,7 @@ private string _rtssStyle = "FullAllInOne";
 private bool _startupEnabled = false;
 private int _billingCycleStartDay = 1;
 private int _wsClientCount = 0;
+private string _deviceType = "Auto";
 
 public void SetSettingsState(string mode, bool rtssEnabled, string rtssStyle, bool startupEnabled, int billingCycleStartDay, int wsClientCount)
 {
@@ -51,6 +53,7 @@ public void UpdateWsClientCount(int count) => _wsClientCount = count;
 public void UpdateStartupState(bool enabled) => _startupEnabled = enabled;
 public void UpdateRtssState(bool enabled, string style) { _rtssOsdEnabled = enabled; _rtssStyle = style; }
 public void UpdateMode(string mode) => _currentMode = mode;
+public void UpdateDeviceType(string type) => _deviceType = string.IsNullOrWhiteSpace(type) ? "Auto" : type;
 
 
     public void SetInitialPlnConfig(double rate, int hours, int days, string tier, string label)
@@ -190,7 +193,8 @@ public void UpdateMode(string mode) => _currentMode = mode;
                         rtssStyle = _rtssStyle,
                         startupEnabled = _startupEnabled,
                         billingCycleStartDay = _billingCycleStartDay,
-                        wsClientCount = _wsClientCount
+                        wsClientCount = _wsClientCount,
+                        deviceType = _deviceType
                     });
                     byte[] buf = Encoding.UTF8.GetBytes(json);
                     context.Response.ContentType = "application/json";
@@ -231,6 +235,9 @@ public void UpdateMode(string mode) => _currentMode = mode;
                                 break;
                             case "setBillingCycleDay":
                                 BillingCycleStartDayChanged?.Invoke(obj.Value<int?>("value") ?? 1);
+                                break;
+                            case "setDeviceType":
+                                DeviceTypeChanged?.Invoke(obj.Value<string>("value") ?? "Auto");
                                 break;
                         }
 
@@ -297,7 +304,7 @@ public void UpdateMode(string mode) => _currentMode = mode;
   <title>LegaxyyFPS Overlay</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg:        #060810;
@@ -849,13 +856,158 @@ public void UpdateMode(string mode) => _currentMode = mode;
     .action-btn:hover{background:rgba(255,255,255,.12);color:var(--t1);border-color:var(--border-hi)}
 
     .nil{color:var(--t3)!important;font-weight:400!important}
+
+    /* ═══════════════════════════════════════════════════════════════
+       EDITORIAL / BRUTALIST OVERRIDE — ink + lime, sharp corners,
+       no glow/gradient. Layout & data-flow untouched.
+       ═══════════════════════════════════════════════════════════════ */
+    :root{
+      --bg:#0a0a0a;
+      --surface:rgba(10,10,10,0.82);
+      --border:rgba(240,239,232,0.16);
+      --border-hi:rgba(240,239,232,0.42);
+      --paper:#f0efe8;
+      --paper-dim:#b9b8ae;
+      --muted:#7d7d74;
+      --lime:#d6ff3f;
+      --hot:#ff4d3d;
+      --warn:#ffb020;
+      /* single-accent mapping: every metric hue collapses to lime */
+      --cpu:var(--lime); --gpu:var(--lime); --ram:var(--lime);
+      --vram:var(--lime); --fps:var(--lime); --pwr:var(--lime);
+      --green:var(--lime); --green-dim:rgba(214,255,63,0.12);
+      --t1:var(--paper); --t2:var(--paper-dim); --t3:var(--muted);
+    }
+    body{font-family:'Archivo',system-ui,sans-serif}
+    /* reserve a top strip so the fixed control cluster never overlaps the cards */
+    .stage{top:64px}
+
+    /* Cards */
+    .card{
+      border:2px solid var(--border-hi); border-radius:0;
+      background:var(--surface);
+      backdrop-filter:none; -webkit-backdrop-filter:none;
+      box-shadow:none;
+    }
+    .card::before{left:0;right:0;top:0;height:2px;background:var(--lime)}
+    .card-cpu::after,.card-gpu::after,.card-ram::after,
+    .card-vram::after,.card-fps::after,.card-pwr::after{display:none}
+
+    /* Chips / device names */
+    .chip{border-radius:0;border:1px solid var(--border-hi);background:transparent;padding:6px 14px}
+    .chip-dot{border-radius:0;box-shadow:none!important;background:var(--lime)!important}
+    .chip-label{font-family:var(--mono);font-size:18px;letter-spacing:0.16em}
+    .device-name{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--paper-dim);text-shadow:none}
+
+    /* Temperature hero */
+    .temp-hero{border-radius:0;border:2px solid var(--border-hi);background:transparent;padding:6px 18px}
+    .temp-val{font-size:80px}
+    .temp-deg{font-size:34px}
+    .temp-tag{border-radius:0;background:var(--lime);color:var(--ink);font-family:var(--mono)}
+
+    /* Load bar */
+    .bar-track{border-radius:0;height:14px;background:rgba(240,239,232,0.08);border:1px solid var(--border)}
+    .bar-fill{border-radius:0}
+    .bar-fill::after{display:none}
+    .load-lbl{font-family:var(--mono);letter-spacing:0.16em}
+    .bar-val{font-size:34px}
+
+    /* Stats list */
+    .stats{border-top:2px solid var(--border-hi)}
+    .stat{border-bottom:1px solid var(--border)}
+    .stat-k{font-family:var(--mono);font-size:18px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)}
+    .stat-v{font-size:32px}
+    .stat-v .u{color:var(--muted)}
+
+    /* Gauges */
+    .gauge-box svg{filter:none}
+    .gauge-bg{stroke:rgba(240,239,232,0.12);stroke-width:13}
+    .gauge-arc{stroke-width:13;stroke-linecap:butt}
+    .gauge-pct{font-size:50px}
+    .gauge-sub{font-family:var(--mono);color:var(--muted)}
+    .temp-pill{border-radius:0;border:1px solid var(--border-hi);background:transparent;font-size:18px}
+
+    /* FPS card */
+    .fps-num{font-size:100px;color:var(--lime);text-shadow:none}
+    .fps-unit{font-family:var(--mono);color:var(--muted)}
+    .fps-ft{font-size:22px}
+    .low-cell{border-radius:0;border:2px solid var(--border-hi);background:transparent}
+    .low-lbl{font-family:var(--mono);color:var(--muted)}
+    .low-val{font-size:44px}
+    .live-badge{border-radius:0;background:transparent;border:1px solid var(--lime);color:var(--lime);font-family:var(--mono)}
+    .live-badge::before{background:var(--lime);border-radius:0}
+
+    /* Power & energy */
+    .pwr-num{font-size:84px;color:var(--lime);text-shadow:none}
+    .pwr-unit{font-family:var(--mono);color:var(--muted)}
+    .pwr-est{display:none;font-family:var(--mono);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+    .energy-panel{border-radius:0;background:transparent;border:0;border-top:2px solid var(--border-hi);padding:12px 0 0}
+    .energy-panel::before{display:none}
+    .energy-month-cost{color:var(--lime);text-shadow:none;font-size:34px}
+    .energy-month-kwh{color:var(--paper-dim);font-family:var(--mono)}
+    .energy-today{color:var(--muted)}
+    .breakdown{display:none;grid-template-columns:1fr 1fr;gap:2px 16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+    .bd-row{display:flex;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:0.02em}
+    .bd-row b{color:var(--paper);font-weight:500}
+    .bd-row .u{color:var(--muted);margin-left:2px;font-size:11px}
+
+    /* Top bar — compact control cluster */
+    .top-bar{gap:0;top:14px;right:14px}
+    .gear-btn,.top-settings-btn,.beacon{border-radius:0;backdrop-filter:none;-webkit-backdrop-filter:none}
+    .gear-btn{width:auto;height:34px;padding:0 12px;gap:6px;background:transparent;border:1px solid var(--border-hi);font-family:var(--mono);font-size:12px;letter-spacing:0.1em}
+    .gear-btn:hover{background:var(--lime);border-color:var(--lime);color:var(--ink);transform:none}
+    .top-settings-btn{
+      height:36px;padding:0 15px;gap:9px;
+      background:var(--ink);border:1px solid var(--border-hi);
+      color:var(--paper-dim);
+      font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;
+    }
+    .top-settings-btn:hover{background:var(--lime);border-color:var(--lime);color:var(--ink)}
+    .top-settings-btn:hover .gear-icon{transform:none}
+    .beacon{
+      height:36px;padding:0 15px;gap:8px;
+      background:var(--ink);border:1px solid var(--border-hi);border-left:0;
+    }
+    .beacon.live{border-color:var(--lime)}
+    .beacon-dot{border-radius:0}
+    .beacon.live .beacon-dot{background:var(--lime);box-shadow:none;border-radius:0}
+    .beacon-lbl{font-family:var(--mono);font-size:12px;letter-spacing:0.08em;text-transform:uppercase}
+    .beacon-hint{font-family:var(--mono);font-size:11px;color:var(--muted)}
+    .beacon-sep{color:var(--border-hi)}
+
+    /* Modals */
+    .modal-overlay{background:rgba(6,6,6,.86);backdrop-filter:none;-webkit-backdrop-filter:none}
+    .modal-card{border-radius:0;background:#0d0d0d;border:2px solid var(--border-hi);box-shadow:none;animation:none}
+    .modal-head{background:transparent;border-bottom:1px solid var(--border)}
+    .modal-dot{border-radius:0;background:var(--lime);box-shadow:none}
+    .modal-title h3{font-family:var(--mono);font-size:16px;letter-spacing:0.06em;text-transform:uppercase}
+    .modal-x{border-radius:0;background:transparent;border:1px solid var(--border-hi)}
+    .modal-x:hover{background:var(--lime);color:var(--ink)}
+    .fctl{border-radius:0;background:transparent;border:2px solid var(--border-hi);font-family:var(--mono)}
+    .fctl:focus{border-color:var(--lime);box-shadow:none;background:transparent}
+    .fctl option{background:#0d0d0d}
+    .preview{border-radius:0;border:1px dashed var(--border-hi);background:transparent}
+    .preview-lbl{color:var(--lime)}
+    .btn{border-radius:0}
+    .btn-ghost{background:transparent;border:2px solid var(--border-hi);color:var(--paper)}
+    .btn-ghost:hover{background:var(--lime);color:var(--ink);border-color:var(--lime)}
+    .btn-primary{background:var(--lime);border:2px solid var(--lime);color:var(--ink);box-shadow:none}
+    .btn-primary:hover{background:transparent;color:var(--lime);box-shadow:none;transform:none}
+    .btn-danger{border-radius:0}
+    .settings-section{border-radius:0;border:2px solid var(--border);background:transparent}
+    .settings-section-title{font-family:var(--mono);color:var(--lime)}
+    .toggle{border-radius:0;background:rgba(240,239,232,0.12)}
+    .toggle.active{background:var(--lime)}
+    .toggle::after{border-radius:0;background:var(--paper)}
+    .action-btn{display:inline-flex;align-items:center;gap:7px;border-radius:0;background:transparent;border:1px solid var(--border-hi);color:var(--paper);font-family:var(--mono)}
+    .action-btn:hover{background:var(--lime);color:var(--ink);border-color:var(--lime)}
   </style>
 </head>
 <body>
 
 <div class="top-bar">
   <button class="top-settings-btn" id="btn-top-settings" type="button" title="Buka Pengaturan Aplikasi">
-    <span class="gear-icon">⚙</span>
+    <span class="gear-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H2.6a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H8.6a1.7 1.7 0 0 0 1-1.55V2.6a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V8.6a1.7 1.7 0 0 0 1.55 1h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></span>
     <span>Pengaturan</span>
   </button>
   <div class="beacon" id="conn">
@@ -1036,18 +1188,30 @@ public void UpdateMode(string mode) => _currentMode = mode;
           <div class="chip-dot" style="background:var(--pwr);box-shadow:0 0 9px var(--pwr-glow)"></div>
           <span class="chip-label">Power</span>
         </div>
-        <button class="gear-btn" id="btn-gear" type="button" title="Pengaturan Tarif PLN">⚙</button>
+        <button class="gear-btn" id="btn-gear" type="button" title="Pengaturan Tarif PLN"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Tarif</button>
       </div>
 
       <div style="position:relative;z-index:1">
         <span class="pwr-num" id="pwr-val">—</span><span class="pwr-unit">W</span>
       </div>
+      <div class="pwr-est" id="pwr-est">± estimasi (database)</div>
 
       <!-- Accumulative Energy Panel (replaces old static cost panel) -->
       <div class="energy-panel">
         <span class="energy-month-cost" id="energy-month-cost">—</span>
         <span class="energy-month-kwh" id="energy-month-kwh">— kWh Bulan Ini</span>
         <span class="energy-today" id="energy-today">Hari ini: —</span>
+      </div>
+
+      <!-- Auto power breakdown -->
+      <div class="breakdown" id="pwr-breakdown">
+        <div class="bd-row"><span>CPU</span><b id="bd-cpu">—</b></div>
+        <div class="bd-row"><span>GPU</span><b id="bd-gpu">—</b></div>
+        <div class="bd-row"><span>RAM</span><b id="bd-ram">—</b></div>
+        <div class="bd-row"><span>Storage</span><b id="bd-storage">—</b></div>
+        <div class="bd-row"><span>Platform</span><b id="bd-platform">—</b></div>
+        <div class="bd-row"><span>Display</span><b id="bd-display">—</b></div>
+        <div class="bd-row"><span>Lainnya</span><b id="bd-other">—</b></div>
       </div>
     </div>
 
@@ -1063,7 +1227,7 @@ public void UpdateMode(string mode) => _currentMode = mode;
         <div class="modal-dot"></div>
         <h3>Kustomisasi Biaya Listrik PLN</h3>
       </div>
-      <button class="modal-x" id="btn-close-modal" type="button">✕</button>
+      <button class="modal-x" id="btn-close-modal" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
 
     <div class="modal-body">
@@ -1112,27 +1276,39 @@ public void UpdateMode(string mode) => _currentMode = mode;
     <div class="modal-head">
       <div class="modal-title">
         <div class="modal-dot"></div>
-        <h3>⚙ Pengaturan Aplikasi</h3>
+        <h3><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:8px"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H2.6a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H8.6a1.7 1.7 0 0 0 1-1.55V2.6a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V8.6a1.7 1.7 0 0 0 1.55 1h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>Pengaturan Aplikasi</h3>
       </div>
-      <button class="modal-x" id="btn-close-settings" type="button">✕</button>
+      <button class="modal-x" id="btn-close-settings" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
 
     <div class="modal-body">
 
       <!-- Performance Mode -->
       <div class="settings-section">
-        <div class="settings-section-title"><span class="s-icon">🎮</span> Mode Performa</div>
+        <div class="settings-section-title"><span class="s-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg></span> Mode Performa</div>
         <div class="fg">
           <select class="fctl" id="set-mode">
-            <option value="Gamer">🎮 Mode Gamer — Hanya OSD In-Game (Hemat Resource)</option>
-            <option value="Streamer">🎥 Mode Streamer — OSD + Dashboard Window (OBS / Layar Kedua)</option>
+            <option value="Gamer">Mode Gamer — Hanya OSD In-Game (Hemat Resource)</option>
+            <option value="Streamer">Mode Streamer — OSD + Dashboard Window (OBS / Layar Kedua)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Device Type (power estimation) -->
+      <div class="settings-section">
+        <div class="settings-section-title"><span class="s-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="5"/><line x1="15" y1="2" x2="15" y2="5"/><line x1="9" y1="19" x2="9" y2="22"/><line x1="15" y1="19" x2="15" y2="22"/><line x1="2" y1="9" x2="5" y2="9"/><line x1="2" y1="15" x2="5" y2="15"/><line x1="19" y1="9" x2="22" y2="9"/><line x1="19" y1="15" x2="22" y2="15"/></svg></span> Tipe Perangkat (Estimasi Daya)</div>
+        <div class="fg">
+          <select class="fctl" id="set-device-type">
+            <option value="Auto">Otomatis — deteksi dari baterai</option>
+            <option value="Desktop">Desktop / PC</option>
+            <option value="Laptop">Laptop</option>
           </select>
         </div>
       </div>
 
       <!-- In-Game OSD (RTSS) -->
       <div class="settings-section">
-        <div class="settings-section-title"><span class="s-icon">📊</span> In-Game OSD (RTSS)</div>
+        <div class="settings-section-title"><span class="s-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span> In-Game OSD (RTSS)</div>
         <div class="toggle-wrap">
           <div>
             <div class="toggle-label">In-Game OSD (RivaTuner / RTSS)</div>
@@ -1153,7 +1329,7 @@ public void UpdateMode(string mode) => _currentMode = mode;
 
       <!-- System Integration -->
       <div class="settings-section">
-        <div class="settings-section-title"><span class="s-icon">🖥️</span> Integrasi Sistem</div>
+        <div class="settings-section-title"><span class="s-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span> Integrasi Sistem</div>
         <div class="toggle-wrap">
           <div>
             <div class="toggle-label">Run on Startup</div>
@@ -1162,8 +1338,8 @@ public void UpdateMode(string mode) => _currentMode = mode;
           <div class="toggle" id="set-startup-toggle"></div>
         </div>
         <div class="action-row" style="margin-top:14px">
-          <button class="action-btn" id="set-btn-update" type="button">🔄 Periksa Pembaruan...</button>
-          <button class="action-btn" id="set-btn-restart-ws" type="button">🔌 Restart WebSocket Server</button>
+          <button class="action-btn" id="set-btn-update" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg> Periksa Pembaruan</button>
+          <button class="action-btn" id="set-btn-restart-ws" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg> Restart WebSocket</button>
         </div>
       </div>
 
@@ -1177,7 +1353,7 @@ public void UpdateMode(string mode) => _currentMode = mode;
 
 <script>
 const $ = id => document.getElementById(id);
-const CIRC = 2 * Math.PI * 68; // r=68 → 427.26
+const CIRC = 2 * Math.PI * 68; // r=68 -> 427.26
 
 function st(el, txt) {
   if (el && el.textContent !== txt) el.textContent = txt;
@@ -1268,15 +1444,16 @@ function syncPlnToBackend(){
 })();
 
 // ─── Energy cost rendering ────────────────────────────────────────────────
-function renderEnergy(pw, todayKwh, monthKwh) {
+function renderEnergy(pw, todayKwh, monthKwh, est) {
+  const mark = est ? '~' : '';
   const elMonthCost = $('energy-month-cost');
   const elMonthKwh  = $('energy-month-kwh');
   const elToday     = $('energy-today');
 
   if (monthKwh != null && !isNaN(monthKwh)) {
     const monthCost = monthKwh * pln.rate;
-    elMonthCost.textContent = 'Rp ' + Math.round(monthCost).toLocaleString('id-ID');
-    elMonthKwh.textContent  = Number(monthKwh).toFixed(2) + ' kWh Bulan Ini';
+    elMonthCost.textContent = 'Rp ' + mark + Math.round(monthCost).toLocaleString('id-ID');
+    elMonthKwh.textContent  = mark + Number(monthKwh).toFixed(2) + ' kWh Bulan Ini';
   } else {
     elMonthCost.textContent = '—';
     elMonthKwh.textContent  = '— kWh Bulan Ini';
@@ -1284,7 +1461,7 @@ function renderEnergy(pw, todayKwh, monthKwh) {
 
   if (todayKwh != null && !isNaN(todayKwh)) {
     const todayCost = todayKwh * pln.rate;
-    elToday.textContent = 'Hari ini: Rp ' + Math.round(todayCost).toLocaleString('id-ID') + ' (' + Number(todayKwh).toFixed(3) + ' kWh)';
+    elToday.textContent = 'Hari ini: Rp ' + mark + Math.round(todayCost).toLocaleString('id-ID') + ' (' + mark + Number(todayKwh).toFixed(3) + ' kWh)';
   } else {
     elToday.textContent = 'Hari ini: —';
   }
@@ -1366,9 +1543,23 @@ function connect() {
     else if (e01) { st(e01, '—'); e01.classList.add('nil'); }
 
     // Power & Energy
-    const pw=d.power?.totalW;
-    st($('pwr-val'), pw!=null?Number(pw).toFixed(1):'—');
-    renderEnergy(pw, d.power?.todayKwh, d.power?.monthKwh);
+    const pw=d.power?.totalW, pest=!!d.power?.isEstimate;
+    st($('pwr-val'), pw!=null?((pest?'~':'')+Number(pw).toFixed(1)):'—');
+    const pe=$('pwr-est'); if(pe) pe.style.display=(pw!=null && pest)?'block':'none';
+    renderEnergy(pw, d.power?.todayKwh, d.power?.monthKwh, pest);
+
+    // Power breakdown (auto)
+    const bd=d.power?.breakdown, bdEl=$('pwr-breakdown');
+    if(bd){
+      if(bdEl && bdEl.style.display!=='grid') bdEl.style.display='grid';
+      sv($('bd-cpu'),      bd.cpuW,      'W', 1);
+      sv($('bd-gpu'),      bd.gpuW,      'W', 1);
+      sv($('bd-ram'),      bd.ramW,      'W', 1);
+      sv($('bd-storage'),  bd.storageW,  'W', 1);
+      sv($('bd-platform'), bd.platformW, 'W', 1);
+      sv($('bd-display'),  bd.displayW,  'W', 1);
+      sv($('bd-other'),    bd.otherW,    'W', 1);
+    } else if(bdEl){ bdEl.style.display='none'; }
   }
 
   const ws=new WebSocket(url);
@@ -1450,6 +1641,7 @@ const setMode=$('set-mode');
 const setRtssToggle=$('set-rtss-toggle');
 const setRtssStyle=$('set-rtss-style');
 const setStartupToggle=$('set-startup-toggle');
+const setDeviceType=$('set-device-type');
 
 // Fetch current settings from backend on load
 async function loadSettings(){
@@ -1462,6 +1654,7 @@ async function loadSettings(){
         setRtssToggle.classList.toggle('active',!!s.rtssOsdEnabled);
         setRtssStyle.value=s.rtssStyle||'FullAllInOne';
         setStartupToggle.classList.toggle('active',!!s.startupEnabled);
+        if(setDeviceType) setDeviceType.value=s.deviceType||'Auto';
         if(s.billingCycleStartDay) pln.billingDay=s.billingCycleStartDay;
       }
     }
@@ -1496,6 +1689,13 @@ setRtssStyle.addEventListener('change',()=>{
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'setRtssStyle',value:setRtssStyle.value})}).catch(()=>{});
 });
+
+if(setDeviceType){
+  setDeviceType.addEventListener('change',()=>{
+    fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'setDeviceType',value:setDeviceType.value})}).catch(()=>{});
+  });
+}
 
 setStartupToggle.addEventListener('click',()=>{
   const active=!setStartupToggle.classList.contains('active');

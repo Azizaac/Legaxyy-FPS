@@ -43,6 +43,8 @@ public sealed class HardwareMonitorService : IDisposable
 
     private Task? _loopTask;
     private bool _loggedGpuSensors = false;
+    private readonly List<string> _storageNames = new();
+    private bool _storageScanned = false;
 
     // ─── ctor ────────────────────────────────────────────────────────────────
     public HardwareMonitorService(int intervalMs, AppLogger logger)
@@ -58,7 +60,7 @@ public sealed class HardwareMonitorService : IDisposable
             IsMotherboardEnabled = false,
             IsControllerEnabled  = false,
             IsNetworkEnabled     = false,
-            IsStorageEnabled     = false,
+            IsStorageEnabled     = true,
             IsPsuEnabled         = false
         };
 
@@ -112,6 +114,17 @@ public sealed class HardwareMonitorService : IDisposable
 
         foreach (var hw in _computer.Hardware)
         {
+            // Storage: only enumerate names once (SMART reads are slow); no per-second Update.
+            if (hw.HardwareType == HardwareType.Storage)
+            {
+                if (!_storageScanned)
+                {
+                    _storageNames.Add(hw.Name);
+                    _logger.Info($"HardwareMonitorService: Storage detected: {hw.Name}");
+                }
+                continue;
+            }
+
             hw.Update();
             foreach (var sub in hw.SubHardware) sub.Update();
 
@@ -145,6 +158,9 @@ public sealed class HardwareMonitorService : IDisposable
                     break;
             }
         }
+
+        _storageScanned = true;
+        devInfo.StorageNames = new List<string>(_storageNames);
 
         var targetGpu = discreteGpu ?? integratedGpu;
         if (targetGpu != null) ReadGpu(targetGpu, gpuData);
@@ -363,7 +379,7 @@ public sealed class HardwareMonitorService : IDisposable
     private static CpuData Clone(CpuData d)       => new() { Temp = d.Temp, Load = d.Load, Clock = d.Clock, Power = d.Power };
     private static GpuData Clone(GpuData d)       => new() { Temp = d.Temp, HotSpotTemp = d.HotSpotTemp, MemTemp = d.MemTemp, Load = d.Load, CoreClock = d.CoreClock, MemClock = d.MemClock, FanRpm = d.FanRpm, VramUsedGb = d.VramUsedGb, VramTotalGb = d.VramTotalGb, Power = d.Power };
     private static MemData Clone(MemData d)       => new() { Load = d.Load, UsedGb = d.UsedGb, TotalGb = d.TotalGb, Clock = d.Clock };
-    private static DeviceInfo Clone(DeviceInfo d) => new() { CpuName = d.CpuName, GpuName = d.GpuName, RamLabel = d.RamLabel };
+    private static DeviceInfo Clone(DeviceInfo d) => new() { CpuName = d.CpuName, GpuName = d.GpuName, RamLabel = d.RamLabel, StorageNames = new List<string>(d.StorageNames) };
 
     // ─── IDisposable ─────────────────────────────────────────────────────────
     private bool _disposed = false;

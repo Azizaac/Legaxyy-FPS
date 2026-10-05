@@ -30,6 +30,7 @@ namespace OverlayDataBridge.Services
         private readonly HardwareMonitorService _hwService;
         private readonly RtssReaderService _rtssReader;
         private readonly PowerAggregatorService _powerService;
+        private readonly EnergyTrackerService _energyService;
         private readonly AppLogger _logger;
         private readonly IConfiguration _config;
 
@@ -63,12 +64,14 @@ namespace OverlayDataBridge.Services
             HardwareMonitorService hwService,
             RtssReaderService rtssReader,
             PowerAggregatorService powerService,
+            EnergyTrackerService energyService,
             IConfiguration config,
             AppLogger logger)
         {
             _hwService = hwService;
             _rtssReader = rtssReader;
             _powerService = powerService;
+            _energyService = energyService;
             _config = config;
             _logger = logger;
 
@@ -239,10 +242,29 @@ namespace OverlayDataBridge.Services
             var gpu = _hwService.GetGpuData();
 
             double watts = pwr.TotalW ?? 0;
-            double cost = (watts / 1000.0) * _hoursPerDay * _daysPerMonth * _tariffPerKwh;
-            string costStr = Math.Round(cost).ToString("#,##0", new System.Globalization.CultureInfo("id-ID"));
 
-            string pwrFormatted = watts > 0 ? $"{watts:F0}" : "—";
+            // Electricity cost from REAL accumulated kWh (same source as the dashboard),
+            // falling back to the static estimate only when no energy data exists yet.
+            double monthKwh = _energyService?.GetMonthKwh() ?? 0;
+            double todayKwh = _energyService?.GetTodayKwh() ?? 0;
+            double monthCost = monthKwh > 0
+                ? monthKwh * _tariffPerKwh
+                : (watts / 1000.0) * _hoursPerDay * _daysPerMonth * _tariffPerKwh;
+            double todayCost = todayKwh * _tariffPerKwh;
+
+            var idId = new System.Globalization.CultureInfo("id-ID");
+
+            // ~ = modelled/estimated, no mark = measured hardware sensor.
+            bool est = pwr.IsEstimate;
+            string mark = est ? "~" : "";
+
+            string costStr      = mark + Math.Round(monthCost).ToString("#,##0", idId);
+            string todayCostStr = mark + Math.Round(todayCost).ToString("#,##0", idId);
+            string monthKwhStr  = mark + monthKwh.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+
+            string pwrFormatted = watts > 0
+                ? mark + watts.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)
+                : "—";
             string fpsStr   = fps.Current.HasValue ? $"{Math.Round(fps.Current.Value)}" : "—";
             string low1Str  = fps.Low1Pct.HasValue ? $"{Math.Round(fps.Low1Pct.Value)}" : "—";
             string low01Str = fps.Low01Pct.HasValue ? $"{Math.Round(fps.Low01Pct.Value)}" : "—";
@@ -277,24 +299,24 @@ namespace OverlayDataBridge.Services
                 case RtssOsdStyle.StackedBlock:
                     // 2-Row Clean Box
                     return $"<C=22D3EE>FPS<C> <C=FFFFFF>{fpsStr}<C>{ftPart}  <C=FB923C>1% LOW<C> <C=FFFFFF>{low1Str}<C><S=75><C=FB923C> FPS<C><S>{hsPart}{vramPart}\n" +
-                           $"<C=F472B6>POWER<C> <C=FFFFFF>{pwrFormatted} W<C>  <C=475569>•<C>  <C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC>/bln<C><S>";
+                           $"<C=F472B6>POWER<C> <C=FFFFFF>{pwrFormatted} W<C>  <C=475569>•<C>  <C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC> /bln ({monthKwhStr} kWh)<C><S>";
 
                 case RtssOsdStyle.FullAllInOne:
-                    // Complete stats: CPU + GPU + Hotspot + VRAM + FPS + Frametime + 1% Low + Power + PLN
+                    // Complete stats: CPU + GPU + Hotspot + VRAM + FPS + Frametime + 1% Low + Power + PLN (real kWh)
                     return $"<C=38BDF8>CPU<C> <C=FFFFFF>{cpuT}<C><S=75><C=94A3B8> {cpuL}<C><S> <C=475569>|<C> <C=C084FC>GPU<C> <C=FFFFFF>{gpuT}<C><S=75><C=94A3B8> {gpuL}<C><S>{hsPart}{vramPart}\n" +
-                           $"<C=22D3EE>FPS<C> <C=FFFFFF>{fpsStr}<C>{ftPart} <C=475569>|<C> <C=FB923C>1%<C> <C=FFFFFF>{low1Str}<C> <C=475569>|<C> <C=F472B6>PWR<C> <C=FFFFFF>{pwrFormatted}W<C> <C=475569>|<C> <C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC>/bln<C><S>";
+                           $"<C=22D3EE>FPS<C> <C=FFFFFF>{fpsStr}<C>{ftPart} <C=475569>|<C> <C=FB923C>1%<C> <C=FFFFFF>{low1Str}<C> <C=475569>|<C> <C=F472B6>PWR<C> <C=FFFFFF>{pwrFormatted}W<C> <C=475569>|<C> <C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC> /bln ({monthKwhStr} kWh) · hari ini Rp {todayCostStr}<C><S>";
 
                 case RtssOsdStyle.Minimal:
                     return $"<C=22D3EE>{fpsStr} FPS<C>{ftPart} <C=475569>•<C> <C=FB923C>1% {low1Str}<C>{hsPart}{vramPart} <C=475569>•<C> <C=F472B6>{pwrFormatted}W<C> <C=475569>•<C> <C=4ADE80>Rp {costStr}<C>";
 
                 case RtssOsdStyle.HorizontalBar:
                 default:
-                    // Cyberpunk Pro Single-Line Bar (FPS, Frametime, 1% Low, GPU, HS, VRAM, Power, PLN)
+                    // Cyberpunk Pro Single-Line Bar (FPS, Frametime, 1% Low, GPU, HS, VRAM, Power, PLN real kWh)
                     return $"<C=22D3EE>FPS<C> <C=FFFFFF>{fpsStr}<C>{ftPart} <C=475569>|<C> " +
                            $"<C=FB923C>1% LOW<C> <C=FFFFFF>{low1Str}<C><S=75><C=FB923C> FPS<C><S> <C=475569>|<C> " +
                            $"<C=C084FC>GPU<C> <C=FFFFFF>{gpuT}<C>{hsPart}{vramPart} <C=475569>|<C> " +
                            $"<C=F472B6>PWR<C> <C=FFFFFF>{pwrFormatted}<C><S=75><C=F472B6>W<C><S> <C=475569>|<C> " +
-                           $"<C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC>/bln<C><S>";
+                           $"<C=4ADE80>PLN<C> <C=FFFFFF>Rp {costStr}<C><S=75><C=86EFAC> /bln ({monthKwhStr} kWh)<C><S>";
             }
         }
 

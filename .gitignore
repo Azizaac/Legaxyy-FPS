@@ -25,3 +25,15 @@ Publish/
 *.tmp
 *.log
 OverlayDataBridge_PublishTemp/
+__pycache__/
+*.pyc
+
+## Secrets / local deploy credentials
+.env
+.env.*
+!.env.example
+deploy.env
+*.pem
+*.key
+*_rsa
+*_ed25519

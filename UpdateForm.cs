@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using OverlayDataBridge.Models;
@@ -45,7 +46,7 @@ public sealed class UpdateForm : Form
         // Header Title
         _lblTitle = new Label
         {
-            Text = "🚀 Pembaruan Baru Tersedia!",
+            Text = "Pembaruan Baru Tersedia!",
             Font = new Font("Segoe UI", 13.5f, FontStyle.Bold),
             ForeColor = Color.FromArgb(96, 165, 250), // Blue-400
             Location = new Point(24, 20),
@@ -205,6 +206,35 @@ public sealed class UpdateForm : Form
                 }
             }
 
+            // ── Verify integrity before running the installer (as Administrator) ──
+            _lblStatus.ForeColor = Color.FromArgb(212, 212, 216); // Zinc-300
+            _lblStatus.Text = "Memverifikasi keamanan file (SHA-256)...";
+
+            if (!string.IsNullOrWhiteSpace(_manifest.Sha256))
+            {
+                string actual = await ComputeSha256Async(setupFilePath);
+                if (!string.Equals(actual, _manifest.Sha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(setupFilePath); } catch { }
+                    throw new Exception(
+                        "Verifikasi keamanan GAGAL: checksum SHA-256 tidak cocok. " +
+                        "File installer kemungkinan korup atau dimodifikasi. Update dibatalkan.");
+                }
+            }
+            else
+            {
+                var choice = MessageBox.Show(
+                    "Server pembaruan tidak menyertakan checksum SHA-256.\n\n" +
+                    "File installer TIDAK dapat diverifikasi keasliannya, namun akan dijalankan " +
+                    "dengan hak Administrator.\n\nLanjutkan tetap menginstal?",
+                    "Peringatan Keamanan — LegaxyyFPS",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (choice != DialogResult.Yes)
+                    throw new Exception("Update dibatalkan oleh pengguna (checksum tidak tersedia).");
+            }
+
             _lblStatus.ForeColor = Color.FromArgb(74, 222, 128); // Green-400
             _lblStatus.Text = "Download selesai! Memulai instalasi...";
             await Task.Delay(1000);
@@ -230,5 +260,13 @@ public sealed class UpdateForm : Form
             _btnUpdate.Enabled = true;
             _btnCancel.Enabled = !_manifest.Mandatory;
         }
+    }
+
+    private static async Task<string> ComputeSha256Async(string filePath)
+    {
+        using var sha = SHA256.Create();
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        byte[] hash = await sha.ComputeHashAsync(stream);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

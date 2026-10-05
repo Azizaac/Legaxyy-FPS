@@ -7,8 +7,8 @@ echo =======================================================
 set "DOTNET_CMD=%LocalAppData%\Microsoft\dotnet\dotnet.exe"
 if not exist "%DOTNET_CMD%" set "DOTNET_CMD=dotnet"
 
-set "ISCC_CMD=C:\Users\Legaxyy\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
-if not exist "%ISCC_CMD%" set "ISCC_CMD=C:\Users\Legaxyy\AppData\Local\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe"
+set "ISCC_CMD=%LocalAppData%\Programs\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC_CMD%" set "ISCC_CMD=%LocalAppData%\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe"
 if not exist "%ISCC_CMD%" set "ISCC_CMD=iscc"
 
 echo 1. Publishing LegaxyyFPS (Release win-x64)...
@@ -33,13 +33,13 @@ if errorlevel 1 (
 )
 
 echo 4. Copying installer to web-server/downloads...
-if exist ".\Release\LegaxyyFPS_Setup_v1.3.0.exe" (
-    copy /y ".\Release\LegaxyyFPS_Setup_v1.3.0.exe" ".\web-server\downloads\LegaxyyFPS_Setup_v1.3.0.exe" >nul
+if exist ".\Release\LegaxyyFPS_Setup_v1.3.2.exe" (
+    copy /y ".\Release\LegaxyyFPS_Setup_v1.3.2.exe" ".\web-server\downloads\LegaxyyFPS_Setup_v1.3.2.exe" >nul
 )
 
 echo =======================================================
 echo   BUILD SUCCESS! Installer is ready:
-echo   - Release\LegaxyyFPS_Setup_v1.3.0.exe
-echo   - web-server\downloads\LegaxyyFPS_Setup_v1.3.0.exe
+echo   - Release\LegaxyyFPS_Setup_v1.3.2.exe
+echo   - web-server\downloads\LegaxyyFPS_Setup_v1.3.2.exe
 echo =======================================================
 pause

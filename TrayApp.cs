@@ -20,6 +20,7 @@ public class UserSettings
     public string PlnTier { get; set; } = "900_nonsubsidi";
     public string PlnLabel { get; set; } = "900 VA";
     public int BillingCycleStartDay { get; set; } = 1;
+    public string DeviceType { get; set; } = "Auto"; // Auto | Desktop | Laptop
 }
 
 /// <summary>
@@ -46,7 +47,6 @@ public sealed class TrayApp : IDisposable
     // ─── tray UI ─────────────────────────────────────────────────────────────
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _statusItem;
-    private readonly ToolStripMenuItem _rtssOsdToggleItem;
     private readonly ToolStripMenuItem _showDashboardItem;
     private readonly System.Windows.Forms.Timer _statusTimer;
     
@@ -67,6 +67,7 @@ public sealed class TrayApp : IDisposable
         int hwInterval        = Cfg(config, "HardwareUpdateIntervalMs", 1000);
         int fpsInterval       = Cfg(config, "FpsUpdateIntervalMs",     300);
         int broadcastInterval = Cfg(config, "BroadcastIntervalMs",    500);
+        string wsBindAddress  = string.IsNullOrWhiteSpace(config["WsBindAddress"]) ? "127.0.0.1" : config["WsBindAddress"]!;
 
         _settings = LoadUserSettings();
 
@@ -75,9 +76,10 @@ public sealed class TrayApp : IDisposable
         _hwService     = new HardwareMonitorService(hwInterval, _logger);
         _rtssService   = new RtssReaderService(fpsInterval, _logger);
         _powerService  = new PowerAggregatorService(_hwService, _logger);
+        _powerService.SetDeviceType(_settings.DeviceType);
         _energyService = new EnergyTrackerService(_powerService, _logger, _settings.BillingCycleStartDay);
-        _rtssOsdWriter = new RtssOsdWriterService(_hwService, _rtssService, _powerService, config, _logger);
-        _wsServer      = new WsBroadcastServer(wsPort, broadcastInterval, _hwService, _rtssService, _powerService, _energyService, _logger);
+        _rtssOsdWriter = new RtssOsdWriterService(_hwService, _rtssService, _powerService, _energyService, config, _logger);
+        _wsServer      = new WsBroadcastServer(wsPort, wsBindAddress, broadcastInterval, _hwService, _rtssService, _powerService, _energyService, _logger);
         _httpServer    = new HttpServerService(_httpPort, wsPort, _logger);
         _updateService = new UpdateService(config, _logger);
 
@@ -106,7 +108,6 @@ public sealed class TrayApp : IDisposable
         {
             if (this._disposed) return;
             _rtssOsdWriter.IsEnabled = enabled;
-            _rtssOsdToggleItem.Checked = enabled;
             _settings.RtssOsdEnabled = enabled;
             SaveUserSettings();
             _httpServer.UpdateRtssState(enabled, _settings.RtssStyle);
@@ -151,6 +152,14 @@ public sealed class TrayApp : IDisposable
             _energyService.UpdateBillingCycleStartDay(day);
         };
 
+        _httpServer.DeviceTypeChanged += (type) =>
+        {
+            if (this._disposed) return;
+            _settings.DeviceType = type;
+            SaveUserSettings();
+            _powerService.SetDeviceType(type);
+        };
+
         if (_settings.PlnRate > 0)
         {
             _rtssOsdWriter.UpdatePlnConfig(_settings.PlnRate, _settings.PlnHours, _settings.PlnDays);
@@ -163,20 +172,15 @@ public sealed class TrayApp : IDisposable
         else
             _rtssOsdWriter.Style = RtssOsdStyle.FullAllInOne;
 
-        // Build simplified context menu (detailed settings moved to Dashboard UI)
+        // Build simplified context menu (all settings live in the Dashboard UI)
         _statusItem = new ToolStripMenuItem("Status: Starting…") { Enabled = false };
-        _showDashboardItem = new ToolStripMenuItem("🖥️ Buka Dashboard", null, OnToggleDashboardClicked);
-        _rtssOsdToggleItem = new ToolStripMenuItem("📊 Toggle In-Game OSD (On/Off)", null, OnToggleRtssOsdClicked)
-        {
-            Checked = _rtssOsdWriter.IsEnabled
-        };
-        var exitItem = new ToolStripMenuItem("❌ Keluar / Exit", null, OnExitClicked);
+        _showDashboardItem = new ToolStripMenuItem("Buka Dashboard", null, OnToggleDashboardClicked);
+        var exitItem = new ToolStripMenuItem("Keluar", null, OnExitClicked);
 
         var contextMenu = new ContextMenuStrip();
         contextMenu.Items.Add(_statusItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(_showDashboardItem);
-        contextMenu.Items.Add(_rtssOsdToggleItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(exitItem);
 
@@ -212,9 +216,10 @@ public sealed class TrayApp : IDisposable
             _settings.BillingCycleStartDay,
             _wsServer.ClientCount
         );
+        _httpServer.UpdateDeviceType(_settings.DeviceType);
 
         RefreshStatus();
-        _logger.Info($"TrayApp: Initialized. WS port={wsPort}, HTTP port={_httpPort}");
+        _logger.Info($"TrayApp: Initialized. WS {wsBindAddress}:{wsPort}, HTTP port={_httpPort}");
 
         // Apply initial mode
         ApplyMode(_settings.Mode, notifyUser: false);
@@ -301,23 +306,6 @@ public sealed class TrayApp : IDisposable
     {
         EnsureOverlayWindow();
         _overlayWindow?.ToggleVisibility();
-    }
-
-    // ─── RTSS callbacks ──────────────────────────────────────────────────────
-    private void OnToggleRtssOsdClicked(object? sender, EventArgs e)
-    {
-        _rtssOsdWriter.IsEnabled = !_rtssOsdWriter.IsEnabled;
-        _rtssOsdToggleItem.Checked = _rtssOsdWriter.IsEnabled;
-        _settings.RtssOsdEnabled = _rtssOsdWriter.IsEnabled;
-        SaveUserSettings();
-        _httpServer.UpdateRtssState(_settings.RtssOsdEnabled, _settings.RtssStyle);
-
-        _trayIcon.ShowBalloonTip(
-            1500,
-            "LegaxyyFPS RTSS In-Game OSD",
-            _rtssOsdWriter.IsEnabled ? "OSD In-Game (RivaTuner) AKTIF" : "OSD In-Game NONAKTIF",
-            ToolTipIcon.Info
-        );
     }
 
     // ─── Settings persistence ────────────────────────────────────────────────

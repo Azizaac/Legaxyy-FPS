@@ -19,6 +19,7 @@ public sealed class WsBroadcastServer : IDisposable
     private readonly EnergyTrackerService _energyService;
     private readonly AppLogger _logger;
     private readonly int _port;
+    private readonly string _bindAddress;
     private readonly int _broadcastIntervalMs;
 
     // ─── Fleck state ─────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ public sealed class WsBroadcastServer : IDisposable
     // ─── ctor ────────────────────────────────────────────────────────────────
     public WsBroadcastServer(
         int port,
+        string bindAddress,
         int broadcastIntervalMs,
         HardwareMonitorService hwService,
         RtssReaderService rtssService,
@@ -49,6 +51,7 @@ public sealed class WsBroadcastServer : IDisposable
         AppLogger logger)
     {
         _port                = port;
+        _bindAddress         = string.IsNullOrWhiteSpace(bindAddress) ? "127.0.0.1" : bindAddress.Trim();
         _broadcastIntervalMs = broadcastIntervalMs;
         _hwService           = hwService;
         _rtssService         = rtssService;
@@ -81,7 +84,7 @@ public sealed class WsBroadcastServer : IDisposable
                     _logger.Info($"[Fleck/{level}] {msg}");
             };
 
-            _server = new WebSocketServer($"ws://0.0.0.0:{_port}");
+            _server = new WebSocketServer($"ws://{_bindAddress}:{_port}");
             _server.Start(socket =>
             {
                 socket.OnOpen = () =>
@@ -103,7 +106,7 @@ public sealed class WsBroadcastServer : IDisposable
                 };
             });
 
-            _logger.Info($"WsBroadcastServer: Listening on ws://localhost:{_port}");
+            _logger.Info($"WsBroadcastServer: Listening on ws://{_bindAddress}:{_port}");
         }
         catch (Exception ex)
         {
@@ -257,7 +260,17 @@ public sealed class WsBroadcastServer : IDisposable
                 totalW     = power.TotalW,
                 isEstimate = power.IsEstimate,
                 todayKwh   = Math.Round(_energyService.GetTodayKwh(), 4),
-                monthKwh   = Math.Round(_energyService.GetMonthKwh(), 4)
+                monthKwh   = Math.Round(_energyService.GetMonthKwh(), 4),
+                breakdown  = power.Breakdown == null ? null : new
+                {
+                    cpuW      = power.Breakdown.CpuW,
+                    gpuW      = power.Breakdown.GpuW,
+                    ramW      = power.Breakdown.RamW,
+                    storageW  = power.Breakdown.StorageW,
+                    platformW = power.Breakdown.PlatformW,
+                    displayW  = power.Breakdown.DisplayW,
+                    otherW    = power.Breakdown.OtherW
+                }
             }
         };
     }
