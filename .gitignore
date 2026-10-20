@@ -1,4 +1,4 @@
-## Build results
+﻿## Build results
 [Bb]in/
 [Oo]bj/
 [Ll]og/
@@ -37,3 +37,11 @@ deploy.env
 *.key
 *_rsa
 *_ed25519
+
+## Private — not for public repo
+upload_to_server.py
+.clinerules
+page_1791804258278/
+web-server/
+dist/
+Release/
